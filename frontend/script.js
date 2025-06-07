@@ -1,21 +1,23 @@
-const backendURL = "http://localhost:3000";
+const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com"; // ← usa tu URL real
 
 function generarTurno() {
   fetch(`${backendURL}/generar-turno`, {
-    method: "POST"
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      // puedes enviar nombre, cedula, etc si lo estás recolectando
+    })
   })
-    .then(res => res.json())
-    .then(data => {
-      document.getElementById("numero-turno").innerText = data.turno.numero;
-      document.getElementById("fecha-hora").innerText = new Date(data.turno.fecha).toLocaleString();
-      document.getElementById("en-espera").innerText = data.enEspera;
-    });
-}
-
-function descargar() {
-  window.print(); // temporal: luego reemplazamos por descarga JPG
-}
-
-function compartirWhatsApp() {
-  alert("Integración con WhatsApp API se configurará en próximos pasos.");
+  .then(res => res.json())
+  .then(data => {
+    console.log("Turno generado:", data);
+    alert(`Tu turno es: ${data.numero}`);
+    // aquí también puedes mostrarlo en pantalla
+  })
+  .catch(err => {
+    console.error("Error al generar turno:", err);
+    alert("Hubo un error al generar el turno");
+  });
 }
