@@ -39,10 +39,10 @@ app.post("/generar-turno", (req, res) => {
 });
 
 // Obtener todos los turnos
-app.get("/turnos", (req, res) => {
-    const db = loadDB();
-    res.json(db);
+app.get('/prueba', (req, res) => {
+  res.send('Ruta de prueba funcionando');
 });
+
 
 // Cambiar estado
 app.post("/cambiar-etapa", (req, res) => {
