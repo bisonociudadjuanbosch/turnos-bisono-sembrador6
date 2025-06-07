@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Turno - Constructora Bisonó</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="ticket" class="ticket">
+    <h1>Constructora Bisonó</h1>
+    <p>Calle Olof Palme, esquina Av. Luperón, Distrito Nacional, República Dominicana</p>
+    <p>809-548-6353</p>
+
+    <h2>TURNO</h2>
+    <div id="numero-turno" class="turno-grande">T-0000</div>
+    <div id="fecha-hora"></div>
+    <p>Cantidad de personas en espera: <span id="en-espera">0</span></p>
+  </div>
+
+  <div class="botones">
+    <button onclick="generarTurno()">Generar Turno</button>
+    <button onclick="descargar()">Descargar Turno</button>
+    <button onclick="compartirWhatsApp()">Compartir por WhatsApp</button>
+    <button onclick="location.href='cotizacion.html'">Ir a Cotización</button>
+    <button onclick="location.href='admin.html'">Panel de Administración</button>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
