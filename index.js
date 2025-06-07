@@ -11,6 +11,12 @@ const DB_FILE = "./db.json";
 app.use(cors());
 app.use(bodyParser.json());
 
+const uploadDir = path.join(__dirname, 'turnos');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+
 // Servir carpeta tickets estática para acceder a las imágenes
 app.use('/tickets', express.static(path.join(__dirname, 'tickets')));
 
