@@ -2,41 +2,47 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const cors = require("cors");
-const multer = require("multer");
 const bodyParser = require("body-parser");
 
 const app = express();
 const PORT = 3000;
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "10mb" })); // aumentar límite para base64
 
-// === CONFIGURACIÓN MULTER ===
+// Carpeta para guardar tickets
 const TICKETS_FOLDER = path.join(__dirname, "tickets");
 if (!fs.existsSync(TICKETS_FOLDER)) fs.mkdirSync(TICKETS_FOLDER);
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, TICKETS_FOLDER);
-  },
-  filename: function (req, file, cb) {
-    const uniqueName = "turno_" + Date.now() + ".jpg";
-    cb(null, uniqueName);
-  }
-});
-const upload = multer({ storage });
-
-// Ruta pública para acceder a los tickets
+// Servir carpeta tickets estática
 app.use("/tickets", express.static(TICKETS_FOLDER));
 
-// Ruta para subir imagen del turno
-app.post("/upload", upload.single("image"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No se subió ningún archivo." });
-  }
+// Endpoint para subir imagen base64 (frontend)
+app.post("/upload-turno", (req, res) => {
+  try {
+    const { image } = req.body;
+    if (!image) {
+      return res.status(400).json({ error: "No se envió la imagen" });
+    }
 
-  const imageUrl = `${req.protocol}://${req.get("host")}/tickets/${req.file.filename}`;
-  res.json({ url: imageUrl });
+    // Quitar encabezado base64 tipo "data:image/jpeg;base64,"
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+
+    // Nombre único con timestamp
+    const filename = `turno_${Date.now()}.jpg`;
+    const filepath = path.join(TICKETS_FOLDER, filename);
+
+    // Guardar archivo en disco
+    fs.writeFileSync(filepath, base64Data, { encoding: "base64" });
+
+    // URL pública para acceder a la imagen
+    const imageUrl = `${req.protocol}://${req.get("host")}/tickets/${filename}`;
+    res.json({ url: imageUrl });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error guardando imagen" });
+  }
 });
 
 // === FUNCIONES DE BASE DE DATOS JSON ===
@@ -71,11 +77,6 @@ app.post("/generar-turno", (req, res) => {
   });
 });
 
-// Obtener todos los turnos (prueba)
-app.get("/prueba", (req, res) => {
-  res.send("Ruta de prueba funcionando");
-});
-
 // Cambiar estado
 app.post("/cambiar-etapa", (req, res) => {
   const { numero, nuevaEtapa } = req.body;
@@ -88,6 +89,11 @@ app.post("/cambiar-etapa", (req, res) => {
   } else {
     res.status(404).json({ status: "not found" });
   }
+});
+
+// Ruta de prueba
+app.get("/prueba", (req, res) => {
+  res.send("Ruta de prueba funcionando");
 });
 
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
