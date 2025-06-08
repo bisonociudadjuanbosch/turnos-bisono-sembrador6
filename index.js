@@ -111,18 +111,9 @@ app.post("/cambiar-etapa", async (req, res) => {
 });
 
 // Obtener turnos con filtros y paginación
-app.get("/api/turnos", (req, res) => {
+app.get('/turnos', (req, res) => {
   let db = loadDB();
-  const {
-    fecha,
-    etapa,
-    telefono,
-    numero,
-    orden = "fecha",
-    sentido = "asc",
-    pagina = "1",
-    limite = "20"
-  } = req.query;
+  const { fecha, etapa, telefono, numero, pagina = 1, limite = 10, orden = "fecha", sentido = "asc" } = req.query;
 
   if (fecha) db = db.filter(t => t.fecha.startsWith(fecha));
   if (etapa) db = db.filter(t => t.etapa === etapa);
@@ -132,7 +123,7 @@ app.get("/api/turnos", (req, res) => {
   db.sort((a, b) => {
     let va = orden === "fecha" ? new Date(a[orden]) : a[orden];
     let vb = orden === "fecha" ? new Date(b[orden]) : b[orden];
-    return sentido === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : va > vb ? -1 : va < vb ? 1 : 0;
+    return sentido === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : (va > vb ? -1 : va < vb ? 1 : 0);
   });
 
   const p = parseInt(pagina), l = parseInt(limite);
@@ -141,9 +132,6 @@ app.get("/api/turnos", (req, res) => {
 
   res.json({ total, pagina: p, limite: l, resultados });
 });
-
-// Ruta de prueba
-app.get("/prueba", (req, res) => res.send("OK"));
 
 // Servidor
 app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
