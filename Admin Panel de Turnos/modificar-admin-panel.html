@@ -1,8 +1,0 @@
-<script>
-  // Chequeo de sesión
-  const usuarioLogueado = JSON.parse(localStorage.getItem('usuarioLogueado'));
-  if (!usuarioLogueado) {
-    alert("Debes iniciar sesión para acceder al panel");
-    window.location.href = "login.html";
-  }
-</script>

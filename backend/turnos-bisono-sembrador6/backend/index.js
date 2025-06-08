@@ -8,16 +8,22 @@ const axios = require("axios");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: "10mb" }));
 
-// === Carpeta para guardar imágenes ===
+// === RUTAS ESTÁTICAS ===
+const PUBLIC_FOLDER = path.join(__dirname, "public");
+app.use(express.static(PUBLIC_FOLDER)); // Sirve todo lo que esté en /public
+
+// === Carpeta para guardar imágenes de tickets ===
 const TICKETS_FOLDER = path.join(__dirname, "tickets");
 if (!fs.existsSync(TICKETS_FOLDER)) fs.mkdirSync(TICKETS_FOLDER);
 app.use("/tickets", express.static(TICKETS_FOLDER));
 
-// === BASE DE DATOS ===
+// === BASE DE DATOS LOCAL ===
 const DB_FILE = "./db.json";
+
 function loadDB() {
   try {
     if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify([]));
@@ -28,11 +34,12 @@ function loadDB() {
     return [];
   }
 }
+
 function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// === Subir imagen base64 ===
+// === SUBIR IMAGEN BASE64 DE TURNO ===
 app.post("/upload-turno", (req, res) => {
   try {
     const { image } = req.body;
@@ -51,7 +58,7 @@ app.post("/upload-turno", (req, res) => {
   }
 });
 
-// === Enviar WhatsApp ===
+// === WHATSAPP AUTOMÁTICO AL SIGUIENTE TURNO ===
 async function notificarSiguienteTurno(db) {
   const siguiente = db.find(t => t.etapa === "Pendiente" && t.telefono);
   if (!siguiente) return;
@@ -78,7 +85,7 @@ async function notificarSiguienteTurno(db) {
   }
 }
 
-// === Generar turno ===
+// === GENERAR TURNO ===
 app.post("/generar-turno", (req, res) => {
   let db = loadDB();
   const { telefono } = req.body;
@@ -103,7 +110,7 @@ app.post("/generar-turno", (req, res) => {
   });
 });
 
-// === Cambiar etapa y notificar ===
+// === CAMBIAR ETAPA ===
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
   let db = loadDB();
@@ -123,15 +130,7 @@ app.post("/cambiar-etapa", async (req, res) => {
   }
 });
 
-// === Ruta de prueba ===
-app.get("/prueba", (req, res) => {
-  res.send("Ruta de prueba funcionando");
-});
-
-// === Panel web estático ===
-app.use(express.static(path.join(__dirname, 'public')));
-
-// === Obtener turnos con filtros ===
+// === API: CONSULTAR TURNOS CON FILTROS ===
 app.get("/api/turnos", (req, res) => {
   let db = loadDB();
   const { fecha, etapa, orden = "fecha", sentido = "asc", pagina = 1, limite = 10, telefono, numero } = req.query;
@@ -153,6 +152,12 @@ app.get("/api/turnos", (req, res) => {
   res.json({ total: db.length, pagina: parseInt(pagina), limite: parseInt(limite), resultados });
 });
 
+// === PRUEBA DE VIDA ===
+app.get("/prueba", (req, res) => {
+  res.send("Ruta de prueba funcionando ✅");
+});
+
+// === INICIAR SERVIDOR ===
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
 });
