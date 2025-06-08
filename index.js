@@ -20,6 +20,9 @@ if (!fs.existsSync(uploadDir)) {
 // Servir carpeta tickets estática para acceder a las imágenes
 app.use('/tickets', express.static(path.join(__dirname, 'tickets')));
 
+
+app.use(express.static(path.join(__dirname))); // Sirve archivos como admin.html desde la raíz
+
 app.get("/", (req, res) => {
   res.send("¡Servidor de Turnos Bisonó activo!");
 });

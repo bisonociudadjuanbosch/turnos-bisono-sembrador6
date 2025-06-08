@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Panel de Administración - Bisonó</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: white;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    th {
+      background-color: #007bff;
+      color: white;
+    }
+
+    select, button {
+      padding: 6px 10px;
+      font-size: 14px;
+    }
+
+    .success {
+      color: green;
+    }
+
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Panel de Administración de Turnos</h1>
+  <p>Aquí puedes ver todos los turnos y cambiar sus etapas manualmente. También puedes enviar notificaciones manuales por WhatsApp si falla la automatización.</p>
+
+  <table id="tabla-turnos">
+    <thead>
+      <tr>
+        <th>Turno</th>
+        <th>Estado Actual</th>
+        <th>Nuevo Estado</th>
+        <th>Cambiar Estado</th>
+        <th>Número WhatsApp</th>
+        <th>Enviar WhatsApp</th>
+        <th>Resultado</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    async function obtenerTurnos() {
+      const tabla = document.querySelector("#tabla-turnos tbody");
+      tabla.innerHTML = "<tr><td colspan='7'>Cargando turnos...</td></tr>";
+
+      try {
+        const res = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/turnos");
+        const turnos = await res.json();
+
+        if (!Array.isArray(turnos)) throw new Error("Respuesta no válida del servidor");
+
+        if (turnos.length === 0) {
+          tabla.innerHTML = "<tr><td colspan='7'>No hay turnos registrados.</td></tr>";
+          return;
+        }
+
+        tabla.innerHTML = "";
+
+        turnos.forEach(turno => {
+          const fila = document.createElement("tr");
+
+          fila.innerHTML = `
+            <td>${turno.numero}</td>
+            <td>${turno.estado}</td>
+            <td>
+              <select>
+                <option ${turno.estado === 'Visitando Apartamentos Modelo' ? 'selected' : ''}>Visitando Apartamentos Modelo</option>
+                <option ${turno.estado === 'Precalificando con el Banco' ? 'selected' : ''}>Precalificando con el Banco</option>
+                <option ${turno.estado === 'En proceso' ? 'selected' : ''}>En proceso</option>
+                <option ${turno.estado === 'Finalizado' ? 'selected' : ''}>Finalizado</option>
+              </select>
+            </td>
+            <td><button onclick="cambiarEtapa('${turno.numero}', this)">Cambiar</button></td>
+            <td>${turno.whatsapp || 'No registrado'}</td>
+            <td><button onclick="enviarWhatsAppManual('${turno.whatsapp}', '${turno.numero}', this)" ${!turno.whatsapp ? 'disabled' : ''}>Enviar WhatsApp</button></td>
+            <td class="resultado"></td>
+          `;
+
+          tabla.appendChild(fila);
+        });
+
+      } catch (error) {
+        tabla.innerHTML = `<tr><td colspan='7' class='error'>Error al cargar turnos: ${error.message}</td></tr>`;
+      }
+    }
+
+    async function cambiarEtapa(numero, boton) {
+      const fila = boton.closest("tr");
+      const nuevaEtapa = fila.querySelector("select").value;
+      const resultado = fila.querySelector(".resultado");
+
+      boton.disabled = true;
+      resultado.textContent = "Cambiando etapa...";
+
+      try {
+        const res = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/cambiar-etapa", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numero, nuevaEtapa })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          resultado.textContent = "✅ Etapa actualizada";
+          resultado.className = "resultado success";
+        } else {
+          resultado.textContent = `❌ ${data.error || 'Error'}`;
+          resultado.className = "resultado error";
+        }
+
+      } catch (err) {
+        resultado.textContent = "❌ Error de red o servidor";
+        resultado.className = "resultado error";
+      }
+
+      boton.disabled = false;
+    }
+
+    async function enviarWhatsAppManual(telefono, turno, boton) {
+      const fila = boton.closest("tr");
+      const resultado = fila.querySelector(".resultado");
+
+      if (!telefono || !turno) {
+        resultado.textContent = "❌ Número o turno inválido";
+        resultado.className = "resultado error";
+        return;
+      }
+
+      boton.disabled = true;
+      resultado.textContent = "Enviando WhatsApp...";
+
+      try {
+        const res = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/enviar-whatsapp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            numeroTelefono: telefono,
+            mensaje: `¡Hola! Es tu turno (${turno}). Por favor acércate a nuestro Oficial de Ventas Bisonó.`
+          })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          resultado.textContent = "✅ WhatsApp enviado";
+          resultado.className = "resultado success";
+        } else {
+          resultado.textContent = `❌ ${data.error || 'No se pudo enviar'}`;
+          resultado.className = "resultado error";
+        }
+
+      } catch (err) {
+        resultado.textContent = "❌ Error al enviar WhatsApp";
+        resultado.className = "resultado error";
+      }
+
+      boton.disabled = false;
+    }
+
+    obtenerTurnos();
+  </script>
+</body>
+</html>
