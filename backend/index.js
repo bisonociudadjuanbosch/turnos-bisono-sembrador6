@@ -8,156 +8,142 @@ const axios = require("axios");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// Middlewares
 app.use(cors());
 app.use(bodyParser.json({ limit: "10mb" }));
 
-// === RUTAS ESTÁTICAS ===
-const PUBLIC_FOLDER = path.join(__dirname, "public");
-app.use(express.static(PUBLIC_FOLDER)); // Sirve todo lo que esté en /public
+// Carpeta pública: index.html y admin.html dentro de /frontend
+const FRONTEND = path.join(__dirname, "frontend");
+app.use(express.static(FRONTEND));
 
-// === Carpeta para guardar imágenes de tickets ===
-const TICKETS_FOLDER = path.join(__dirname, "tickets");
-if (!fs.existsSync(TICKETS_FOLDER)) fs.mkdirSync(TICKETS_FOLDER);
-app.use("/tickets", express.static(TICKETS_FOLDER));
+// Tickets (imágenes capturadas)
+const TICKETS = path.join(__dirname, "tickets");
+if (!fs.existsSync(TICKETS)) fs.mkdirSync(TICKETS);
+app.use("/tickets", express.static(TICKETS));
 
-// === BASE DE DATOS LOCAL ===
-const DB_FILE = "./db.json";
-
+// Base de datos local
+const DB_FILE = path.join(__dirname, "db.json");
 function loadDB() {
-  try {
-    if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify([]));
-    const data = fs.readFileSync(DB_FILE, "utf8");
-    return JSON.parse(data || "[]");
-  } catch (err) {
-    console.error("Error al leer db.json", err);
-    return [];
-  }
+  if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, "[]");
+  return JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
 }
-
 function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// === SUBIR IMAGEN BASE64 DE TURNO ===
+// Subir imagen de ticket
 app.post("/upload-turno", (req, res) => {
-  try {
-    const { image } = req.body;
-    if (!image) return res.status(400).json({ error: "No se envió la imagen" });
+  const { image } = req.body;
+  if (!image) return res.status(400).json({ error: "Falta imagen" });
 
-    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
-    const filename = `turno_${Date.now()}.jpg`;
-    const filepath = path.join(TICKETS_FOLDER, filename);
-    fs.writeFileSync(filepath, base64Data, { encoding: "base64" });
+  const b64 = image.replace(/^data:image\/\w+;base64,/, "");
+  const filename = `turno_${Date.now()}.jpg`;
+  const filepath = path.join(TICKETS, filename);
 
-    const imageUrl = `${req.protocol}://${req.get("host")}/tickets/${filename}`;
-    res.json({ url: imageUrl });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error guardando imagen" });
-  }
+  fs.writeFile(filepath, b64, "base64", err => {
+    if (err) return res.status(500).json({ error: "No se pudo guardar imagen" });
+    const url = `${req.protocol}://${req.get("host")}/tickets/${filename}`;
+    res.json({ url });
+  });
 });
 
-// === WHATSAPP AUTOMÁTICO AL SIGUIENTE TURNO ===
-async function notificarSiguienteTurno(db) {
-  const siguiente = db.find(t => t.etapa === "Pendiente" && t.telefono);
-  if (!siguiente) return;
-
-  try {
-    await axios.post(
-      "https://graph.facebook.com/v19.0/18096690177/messages",
-      {
-        messaging_product: "whatsapp",
-        to: siguiente.telefono,
-        type: "text",
-        text: { body: "¡Hola! es tu Turno, por favor acercate a nuestro Oficial de Ventas Bisono." }
-      },
-      {
-        headers: {
-          Authorization: `Bearer sk_33ed3140aca24e4c98cd75b52b5c7722`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-    console.log("WhatsApp enviado a:", siguiente.telefono);
-  } catch (error) {
-    console.error("Error al enviar WhatsApp:", error.response?.data || error.message);
-  }
-}
-
-// === GENERAR TURNO ===
+// Generar turno
 app.post("/generar-turno", (req, res) => {
-  let db = loadDB();
   const { telefono } = req.body;
-  const fechaHoy = new Date().toISOString().slice(0, 10);
-  const turnosHoy = db.filter(t => t.fecha.startsWith(fechaHoy));
-  const ultimo = turnosHoy.length ? turnosHoy[turnosHoy.length - 1].numero : "T-0000";
-  const secuencia = parseInt(ultimo.split("-")[1]) + 1;
+  const db = loadDB();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const hoyTurnos = db.filter(t => t.fecha.startsWith(hoy));
+  const ultimo = hoyTurnos.length ? hoyTurnos[hoyTurnos.length - 1].numero : "T-0000";
+  const seq = parseInt(ultimo.split("-")[1]) + 1;
 
-  const nuevoTurno = {
-    numero: `T-${secuencia.toString().padStart(4, '0')}`,
+  const nuevo = {
+    numero: `T-${seq.toString().padStart(4, "0")}`,
     fecha: new Date().toISOString(),
     etapa: "Pendiente",
-    telefono: telefono || null
+    telefono: telefono || ""
   };
-
-  db.push(nuevoTurno);
+  db.push(nuevo);
   saveDB(db);
 
   res.json({
-    turno: nuevoTurno,
-    enEspera: db.filter(t => t.fecha.startsWith(fechaHoy) && t.etapa === "Pendiente").length
+    turno: nuevo,
+    enEspera: db.filter(t => t.fecha.startsWith(hoy) && t.etapa === "Pendiente").length
   });
 });
 
-// === CAMBIAR ETAPA ===
+// Cambiar etapa + notificar siguiente pendiente si tiene teléfono
+async function notificarSiguienteTurno(db) {
+  const sig = db.find(t => t.etapa === "Pendiente" && t.telefono);
+  if (!sig) return;
+
+  const text = {
+    messaging_product: "whatsapp",
+    to: sig.telefono,
+    type: "text",
+    text: { body: "¡Hola! ya está tu turno. Por favor acércate." }
+  };
+
+  try {
+    await axios.post("https://graph.facebook.com/v19.0/18096690177/messages", text, {
+      headers: {
+        Authorization: `Bearer SK_TOKEN`, // remplaza por tu token
+        "Content-Type": "application/json"
+      }
+    });
+    console.log("WhatsApp enviado a", sig.telefono);
+  } catch (e) {
+    console.error("Error al notificar:", e.response?.data || e.message);
+  }
+}
+
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
-  let db = loadDB();
-  const index = db.findIndex(t => t.numero === numero);
+  const db = loadDB();
+  const i = db.findIndex(t => t.numero === numero);
+  if (i === -1) return res.status(404).json({ error: "No encontrado" });
 
-  if (index >= 0) {
-    db[index].etapa = nuevaEtapa;
-    saveDB(db);
+  db[i].etapa = nuevaEtapa;
+  saveDB(db);
 
-    if (nuevaEtapa !== "Pendiente") {
-      await notificarSiguienteTurno(db);
-    }
+  if (nuevaEtapa !== "Pendiente") await notificarSiguienteTurno(db);
 
-    res.json({ status: "ok", turno: db[index] });
-  } else {
-    res.status(404).json({ status: "not found" });
-  }
+  res.json({ turno: db[i] });
 });
 
-// === API: CONSULTAR TURNOS CON FILTROS ===
+// Obtener turnos con filtros y paginación
 app.get("/api/turnos", (req, res) => {
   let db = loadDB();
-  const { fecha, etapa, orden = "fecha", sentido = "asc", pagina = 1, limite = 10, telefono, numero } = req.query;
+  const {
+    fecha,
+    etapa,
+    telefono,
+    numero,
+    orden = "fecha",
+    sentido = "asc",
+    pagina = "1",
+    limite = "20"
+  } = req.query;
 
   if (fecha) db = db.filter(t => t.fecha.startsWith(fecha));
   if (etapa) db = db.filter(t => t.etapa === etapa);
-  if (telefono) db = db.filter(t => t.telefono?.includes(telefono));
+  if (telefono) db = db.filter(t => t.telefono.includes(telefono));
   if (numero) db = db.filter(t => t.numero === numero);
 
   db.sort((a, b) => {
-    let valA = orden === "fecha" ? new Date(a[orden]) : a[orden];
-    let valB = orden === "fecha" ? new Date(b[orden]) : b[orden];
-    return (valA < valB ? -1 : 1) * (sentido === "asc" ? 1 : -1);
+    let va = orden === "fecha" ? new Date(a[orden]) : a[orden];
+    let vb = orden === "fecha" ? new Date(b[orden]) : b[orden];
+    return sentido === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : va > vb ? -1 : va < vb ? 1 : 0;
   });
 
-  const inicio = (parseInt(pagina) - 1) * parseInt(limite);
-  const resultados = db.slice(inicio, inicio + parseInt(limite));
+  const p = parseInt(pagina), l = parseInt(limite);
+  const total = db.length;
+  const resultados = db.slice((p - 1) * l, p * l);
 
-  res.json({ total: db.length, pagina: parseInt(pagina), limite: parseInt(limite), resultados });
+  res.json({ total, pagina: p, limite: l, resultados });
 });
 
-// === PRUEBA DE VIDA ===
-app.get("/prueba", (req, res) => {
-  res.send("Ruta de prueba funcionando ✅");
-});
+// Ruta de prueba
+app.get("/prueba", (req, res) => res.send("OK"));
 
-// === INICIAR SERVIDOR ===
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
-});
+// Servidor
+app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
