@@ -6,12 +6,12 @@ const bodyParser = require("body-parser");
 const axios = require("axios");
 
 const app = express();
-const PORT = process.env.PORT || 3000;  // Por defecto 3000 si no está en Render
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(bodyParser.json({ limit: "10mb" }));
 
-// === Carpeta para guardar imágenes de tickets ===
+// === Carpeta para guardar imágenes ===
 const TICKETS_FOLDER = path.join(__dirname, "tickets");
 if (!fs.existsSync(TICKETS_FOLDER)) fs.mkdirSync(TICKETS_FOLDER);
 app.use("/tickets", express.static(TICKETS_FOLDER));
@@ -19,14 +19,20 @@ app.use("/tickets", express.static(TICKETS_FOLDER));
 // === BASE DE DATOS ===
 const DB_FILE = "./db.json";
 function loadDB() {
-  if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify([]));
-  return JSON.parse(fs.readFileSync(DB_FILE));
+  try {
+    if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify([]));
+    const data = fs.readFileSync(DB_FILE, "utf8");
+    return JSON.parse(data || "[]");
+  } catch (err) {
+    console.error("Error al leer db.json", err);
+    return [];
+  }
 }
 function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// === Subir imagen base64 de ticket ===
+// === Subir imagen base64 ===
 app.post("/upload-turno", (req, res) => {
   try {
     const { image } = req.body;
@@ -45,22 +51,19 @@ app.post("/upload-turno", (req, res) => {
   }
 });
 
-// === Enviar WhatsApp al siguiente turno pendiente ===
+// === Enviar WhatsApp ===
 async function notificarSiguienteTurno(db) {
   const siguiente = db.find(t => t.etapa === "Pendiente" && t.telefono);
   if (!siguiente) return;
-
-  const numeroTelefono = siguiente.telefono;
-  const mensaje = "¡Hola! es tu Turno, por favor acercate a nuestro Oficial de Ventas Bisono.";
 
   try {
     await axios.post(
       "https://graph.facebook.com/v19.0/18096690177/messages",
       {
         messaging_product: "whatsapp",
-        to: numeroTelefono,
+        to: siguiente.telefono,
         type: "text",
-        text: { body: mensaje }
+        text: { body: "¡Hola! es tu Turno, por favor acercate a nuestro Oficial de Ventas Bisono." }
       },
       {
         headers: {
@@ -69,19 +72,19 @@ async function notificarSiguienteTurno(db) {
         }
       }
     );
-    console.log("WhatsApp enviado a:", numeroTelefono);
+    console.log("WhatsApp enviado a:", siguiente.telefono);
   } catch (error) {
     console.error("Error al enviar WhatsApp:", error.response?.data || error.message);
   }
 }
 
-// === Generar turno nuevo ===
+// === Generar turno ===
 app.post("/generar-turno", (req, res) => {
   let db = loadDB();
   const { telefono } = req.body;
   const fechaHoy = new Date().toISOString().slice(0, 10);
   const turnosHoy = db.filter(t => t.fecha.startsWith(fechaHoy));
-  const ultimo = turnosHoy.length > 0 ? turnosHoy[turnosHoy.length - 1].numero : "T-0000";
+  const ultimo = turnosHoy.length ? turnosHoy[turnosHoy.length - 1].numero : "T-0000";
   const secuencia = parseInt(ultimo.split("-")[1]) + 1;
 
   const nuevoTurno = {
@@ -100,11 +103,12 @@ app.post("/generar-turno", (req, res) => {
   });
 });
 
-// === Cambiar etapa de un turno y notificar siguiente ===
+// === Cambiar etapa y notificar ===
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
   let db = loadDB();
   const index = db.findIndex(t => t.numero === numero);
+
   if (index >= 0) {
     db[index].etapa = nuevaEtapa;
     saveDB(db);
@@ -124,74 +128,31 @@ app.get("/prueba", (req, res) => {
   res.send("Ruta de prueba funcionando");
 });
 
-// Cargar turnos desde db.json
-function loadDB() {
-  try {
-    const data = fs.readFileSync(DB_FILE, 'utf8');
-    return JSON.parse(data || '[]');
-  } catch (err) {
-    console.error("Error al leer db.json", err);
-    return [];
-  }
-}
-
-// Guardar turnos en db.json
-function saveDB(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-}
-
-// Ruta directa para el panel de administración
+// === Panel web estático ===
 app.use(express.static(path.join(__dirname, 'public')));
 
-// === Obtener turnos con filtros opcionales ===
+// === Obtener turnos con filtros ===
 app.get("/api/turnos", (req, res) => {
   let db = loadDB();
   const { fecha, etapa, orden = "fecha", sentido = "asc", pagina = 1, limite = 10, telefono, numero } = req.query;
 
-  // Filtros
-  if (fecha) {
-    db = db.filter(t => t.fecha.startsWith(fecha));
-  }
-  if (etapa) {
-    db = db.filter(t => t.etapa === etapa);
-  }
-  if (telefono) {
-    db = db.filter(t => t.telefono && t.telefono.includes(telefono));
-  }
-  if (numero) {
-    db = db.filter(t => t.numero === numero);
-  }
+  if (fecha) db = db.filter(t => t.fecha.startsWith(fecha));
+  if (etapa) db = db.filter(t => t.etapa === etapa);
+  if (telefono) db = db.filter(t => t.telefono?.includes(telefono));
+  if (numero) db = db.filter(t => t.numero === numero);
 
-  // Ordenamiento
   db.sort((a, b) => {
-    let valorA = a[orden];
-    let valorB = b[orden];
-
-    if (orden === "fecha") {
-      valorA = new Date(valorA);
-      valorB = new Date(valorB);
-    }
-
-    if (valorA < valorB) return sentido === "asc" ? -1 : 1;
-    if (valorA > valorB) return sentido === "asc" ? 1 : -1;
-    return 0;
+    let valA = orden === "fecha" ? new Date(a[orden]) : a[orden];
+    let valB = orden === "fecha" ? new Date(b[orden]) : b[orden];
+    return (valA < valB ? -1 : 1) * (sentido === "asc" ? 1 : -1);
   });
 
-  // Paginación
-  const pag = parseInt(pagina);
-  const lim = parseInt(limite);
-  const inicio = (pag - 1) * lim;
-  const fin = inicio + lim;
-  const paginados = db.slice(inicio, fin);
+  const inicio = (parseInt(pagina) - 1) * parseInt(limite);
+  const resultados = db.slice(inicio, inicio + parseInt(limite));
 
-  res.json({
-    total: db.length,
-    pagina: pag,
-    limite: lim,
-    resultados: paginados
-  });
+  res.json({ total: db.length, pagina: parseInt(pagina), limite: parseInt(limite), resultados });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
