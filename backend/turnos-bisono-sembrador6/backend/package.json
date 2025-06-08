@@ -4,8 +4,8 @@
   "description": "Sistema de turnos para Constructora Bisonó",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
-  },
+  "start": "node backend/index.js"
+}
   "dependencies": {
     "axios": "^1.6.8",
     "body-parser": "^1.20.2",

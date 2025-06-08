@@ -6,7 +6,7 @@ const bodyParser = require("body-parser");
 const axios = require("axios");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;  // Por defecto 3000 si no está en Render
 
 app.use(cors());
 app.use(bodyParser.json({ limit: "10mb" }));
@@ -192,6 +192,6 @@ app.get("/api/turnos", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
