@@ -14,12 +14,14 @@ async function obtenerTurnos() {
 
     let turnos;
     try {
-      turnos = JSON.parse(text);
+      const data = JSON.parse(text);
+
+      if (!Array.isArray(data.resultados)) throw new Error("Respuesta no válida del servidor");
+
+      turnos = data.resultados;
     } catch {
       throw new Error("Respuesta no JSON válida: " + text);
     }
-
-    if (!Array.isArray(turnos)) throw new Error("Respuesta no válida del servidor");
 
     if (turnos.length === 0) {
       tabla.innerHTML = "<tr><td colspan='7'>No hay turnos registrados.</td></tr>";
@@ -29,7 +31,26 @@ async function obtenerTurnos() {
     tabla.innerHTML = "";
 
     turnos.forEach(turno => {
-      // tu código para crear filas
+      const fila = document.createElement("tr");
+      fila.innerHTML = `
+        <td>${safe(turno.numero)}</td>
+        <td>${safe(turno.etapa)}</td>
+        <td>
+          <select class="nuevo-estado">
+            <option value="Pendiente">Pendiente</option>
+            <option value="Visitando Apartamentos Modelo">Visitando Apartamentos Modelo</option>
+            <option value="Precalificando con el Banco">Precalificando con el Banco</option>
+            <option value="OK">OK</option>
+            <option value="En Proceso">En Proceso</option>
+            <option value="Finalizado">Finalizado</option>
+          </select>
+        </td>
+        <td><button class="cambiar-estado">Cambiar</button></td>
+        <td>${safe(turno.telefono)}</td>
+        <td><button class="enviar-wsp">Enviar</button></td>
+        <td class="resultado"></td>
+      `;
+      tabla.appendChild(fila);
     });
 
   } catch (error) {
