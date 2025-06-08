@@ -8,30 +8,38 @@ const axios = require("axios");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middlewares
+// Configuración inicial
 app.use(cors());
 app.use(bodyParser.json({ limit: "10mb" }));
 
-// Carpeta pública: index.html y admin.html dentro de /frontend
+// 📂 Carpeta del frontend
 const FRONTEND = path.join(__dirname, "frontend");
 app.use(express.static(FRONTEND));
 
-// Tickets (imágenes capturadas)
+// 📂 Carpeta donde se guardan las imágenes de tickets
 const TICKETS = path.join(__dirname, "tickets");
 if (!fs.existsSync(TICKETS)) fs.mkdirSync(TICKETS);
 app.use("/tickets", express.static(TICKETS));
 
-// Base de datos local
+// 📁 Base de datos local
 const DB_FILE = path.join(__dirname, "db.json");
+
+// 🔄 Cargar la base de datos (o crearla si no existe)
 function loadDB() {
-  if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, "[]");
-  return JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+  if (!fs.existsSync(DB_FILE)) {
+    console.log("⚠️ No se encontró db.json. Creando uno nuevo...");
+    fs.writeFileSync(DB_FILE, "[]");
+  }
+  const data = fs.readFileSync(DB_FILE, "utf8");
+  return JSON.parse(data);
 }
+
+// 💾 Guardar la base de datos
 function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// Subir imagen de ticket
+// 📸 Subir imagen del ticket
 app.post("/upload-turno", (req, res) => {
   const { image } = req.body;
   if (!image) return res.status(400).json({ error: "Falta imagen" });
@@ -47,7 +55,7 @@ app.post("/upload-turno", (req, res) => {
   });
 });
 
-// Generar turno
+// 🆕 Generar turno
 app.post("/generar-turno", (req, res) => {
   const { telefono } = req.body;
   const db = loadDB();
@@ -65,13 +73,15 @@ app.post("/generar-turno", (req, res) => {
   db.push(nuevo);
   saveDB(db);
 
+  console.log(`✅ Turno generado: ${nuevo.numero}`);
+
   res.json({
     turno: nuevo,
     enEspera: db.filter(t => t.fecha.startsWith(hoy) && t.etapa === "Pendiente").length
   });
 });
 
-// Cambiar etapa + notificar siguiente pendiente si tiene teléfono
+// 📲 Notificar por WhatsApp al siguiente turno pendiente
 async function notificarSiguienteTurno(db) {
   const sig = db.find(t => t.etapa === "Pendiente" && t.telefono);
   if (!sig) return;
@@ -80,41 +90,46 @@ async function notificarSiguienteTurno(db) {
     messaging_product: "whatsapp",
     to: sig.telefono,
     type: "text",
-    text: { body: "¡Hola! ya está tu turno. Por favor acércate." }
+    text: {
+      body: "¡Hola! Es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó."
+    }
   };
 
   try {
     await axios.post("https://graph.facebook.com/v19.0/18096690177/messages", text, {
       headers: {
-        Authorization: `Bearer SK_TOKEN`, // remplaza por tu token
+        Authorization: `Bearer sk_33ed3140aca24e4c98cd75b52b5c7722`, // ✅ Reemplaza por tu token real si cambia
         "Content-Type": "application/json"
       }
     });
-    console.log("WhatsApp enviado a", sig.telefono);
+    console.log("📤 WhatsApp enviado a", sig.telefono);
   } catch (e) {
-    console.error("Error al notificar:", e.response?.data || e.message);
+    console.error("❌ Error al notificar:", e.response?.data || e.message);
   }
 }
 
+// 🔄 Cambiar la etapa de un turno
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
   const db = loadDB();
   const i = db.findIndex(t => t.numero === numero);
-  if (i === -1) return res.status(404).json({ error: "No encontrado" });
+  if (i === -1) return res.status(404).json({ error: "Turno no encontrado" });
 
   db[i].etapa = nuevaEtapa;
   saveDB(db);
 
-  if (nuevaEtapa !== "Pendiente") await notificarSiguienteTurno(db);
+  if (nuevaEtapa !== "Pendiente") {
+    await notificarSiguienteTurno(db);
+  }
 
+  console.log(`🔁 Turno ${numero} ahora está en etapa: ${nuevaEtapa}`);
   res.json({ turno: db[i] });
 });
 
-// Obtener turnos con filtros y paginación
-app.get('/turnos', (req, res) => {
+// 📋 Obtener lista de turnos (con filtros)
+app.get("/turnos", (req, res) => {
   let db = loadDB();
-
-  const { fecha, etapa, telefono, numero, pagina = 1, limite = 100, orden = "fecha", sentido = "asc" } = req.query;
+  const { fecha, etapa, telefono, numero, pagina = 1, limite = 10, orden = "fecha", sentido = "asc" } = req.query;
 
   if (fecha) db = db.filter(t => t.fecha.startsWith(fecha));
   if (etapa) db = db.filter(t => t.etapa === etapa);
@@ -124,7 +139,7 @@ app.get('/turnos', (req, res) => {
   db.sort((a, b) => {
     let va = orden === "fecha" ? new Date(a[orden]) : a[orden];
     let vb = orden === "fecha" ? new Date(b[orden]) : b[orden];
-    return sentido === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : va > vb ? -1 : va < vb ? 1 : 0;
+    return sentido === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : (va > vb ? -1 : va < vb ? 1 : 0);
   });
 
   const p = parseInt(pagina), l = parseInt(limite);
@@ -134,5 +149,8 @@ app.get('/turnos', (req, res) => {
   res.json({ total, pagina: p, limite: l, resultados });
 });
 
-// Servidor
-app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
+// 🚀 Iniciar servidor
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+  console.log("📍 Base de datos en:", DB_FILE);
+});
