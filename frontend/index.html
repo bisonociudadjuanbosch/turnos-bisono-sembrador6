@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Turno - Constructora Bisonó</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 20px;
+      background-color: #f9f9f9;
+    }
+
+    .ticket {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 400px;
+      margin: auto;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+
+    .turno-grande {
+      font-size: 48px;
+      font-weight: bold;
+      margin: 20px 0;
+    }
+
+    .botones {
+      margin-top: 20px;
+    }
+
+    .botones button {
+      margin: 5px;
+      padding: 10px 15px;
+      font-size: 14px;
+      border: none;
+      background-color: #007bff;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .botones button:hover {
+      background-color: #0056b3;
+    }
+
+    #resultado {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="ticket" class="ticket">
+    <h1>Constructora Bisonó</h1>
+    <p><strong>Calle Olof Palme, esquina Av. Luperón</strong><br>
+    Distrito Nacional, República Dominicana<br>
+    Tel: 809-548-6353</p>
+
+    <h3 style="margin-top: 20px;">Residencial El Sembrador VI</h3>
+    <p><strong>Ciudad Juan Bosch</strong><br>Santo Domingo Este</p>
+
+    <h2 style="margin-top: 30px;">TURNO</h2>
+    <div id="numero-turno" class="turno-grande">T-0000</div>
+    <div id="fecha-hora" style="margin-bottom: 10px;"></div>
+    <p>Cantidad de personas en espera: <span id="en-espera">0</span></p>
+  </div>
+
+  <div class="botones">
+    <button onclick="generarTurno()">Generar Turno</button>
+    <button onclick="descargar()">Descargar Turno</button>
+    <button onclick="compartirWhatsApp()">Compartir por WhatsApp</button>
+    <button onclick="location.href='cotizacion.html'">Ir a Cotización</button>
+    <button onclick="location.href='admin.html'">Panel de Administración</button>
+  </div>
+
+  <div id="resultado"></div>
+
+  <script>
+    let turnoActual = 0;
+
+    function generarTurno() {
+      turnoActual++;
+      const numero = "T-" + turnoActual.toString().padStart(4, "0");
+      document.getElementById("numero-turno").innerText = numero;
+
+      const ahora = new Date();
+      const fechaHora = ahora.toLocaleString("es-DO", {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+      document.getElementById("fecha-hora").innerText = "Fecha y hora: " + fechaHora;
+
+      document.getElementById("en-espera").innerText = Math.max(0, turnoActual - 1);
+    }
+
+    function descargar() {
+      const ticket = document.getElementById("ticket");
+      const botones = document.querySelector(".botones");
+
+      botones.style.display = "none";
+
+      html2canvas(ticket, {
+        backgroundColor: "#ffffff",
+        scale: 2
+      }).then(canvas => {
+        botones.style.display = "block";
+
+        const link = document.createElement("a");
+        link.download = "turno.jpg";
+        link.href = canvas.toDataURL("image/jpeg", 1.0);
+        link.click();
+      });
+    }
+
+async function compartirWhatsApp() {
+  const ticket = document.getElementById("ticket");
+  const botones = document.querySelector(".botones");
+  const resultado = document.getElementById("resultado");
+
+  const numeroCliente = prompt("Por favor ingresa tu número de WhatsApp (solo números, ejemplo: 18099138597):");
+  if (!numeroCliente || !/^\d{10,15}$/.test(numeroCliente)) {
+    alert("Número inválido. Intenta de nuevo.");
+    return;
+  }
+
+  botones.style.display = "none";
+
+  try {
+    // Captura el contenido del ticket como imagen
+    const canvas = await html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 });
+    const base64image = canvas.toDataURL("image/jpeg", 1.0);
+
+    // Subir imagen al backend
+    const response = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/upload-turno", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: base64image })
+    });
+
+    if (!response.ok) throw new Error("Error al subir la imagen");
+
+    const data = await response.json(); // { url: "https://..." }
+
+    // Mostrar resultado en pantalla
+    resultado.innerHTML = `<p>Tu imagen está disponible en:</p><a href="${data.url}" target="_blank">${data.url}</a>`;
+
+    // Enviar mensaje al número del cliente desde backend
+    const sendMsg = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/enviar-whatsapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: numeroCliente,
+        mensaje: `¡Hola! Ya tienes tu turno asignado en Constructora Bisonó. Aquí está tu ticket: ${data.url}`
+      })
+    });
+
+    if (!sendMsg.ok) throw new Error("No se pudo enviar el mensaje por WhatsApp Business API");
+
+    alert("Turno enviado exitosamente a WhatsApp del cliente.");
+
+  } catch (error) {
+    alert("Ocurrió un error: " + error.message);
+  } finally {
+    botones.style.display = "block";
+  }
+}
+
+  </script>
+
+</body>
+</html>

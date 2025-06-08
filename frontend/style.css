@@ -1,0 +1,28 @@
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  padding: 20px;
+}
+
+.ticket {
+  border: 2px dashed #000;
+  padding: 20px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.turno-grande {
+  font-size: 48px;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.botones {
+  margin-top: 20px;
+}
+
+button {
+  margin: 10px;
+  padding: 10px 20px;
+  font-size: 16px;
+}

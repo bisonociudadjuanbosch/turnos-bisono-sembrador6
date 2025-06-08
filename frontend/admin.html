@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Panel de Administración - Bisonó</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+
+    h1 {
+      color: #333;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: white;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    th {
+      background-color: #007bff;
+      color: white;
+    }
+
+    select, button {
+      padding: 6px 10px;
+      font-size: 14px;
+    }
+
+    .success {
+      color: green;
+    }
+
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <h1>Panel de Administración de Turnos</h1>
+  <p>Desde aquí puedes gestionar los turnos, cambiar estados y enviar mensajes por WhatsApp.</p>
+
+  <table id="tabla-turnos">
+    <thead>
+      <tr>
+        <th>Turno</th>
+        <th>Estado Actual</th>
+        <th>Nuevo Estado</th>
+        <th>Cambiar Estado</th>
+        <th>Número WhatsApp</th>
+        <th>Enviar WhatsApp</th>
+        <th>Resultado</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script src="admin.js" defer></script>
+</body>
+</html>
