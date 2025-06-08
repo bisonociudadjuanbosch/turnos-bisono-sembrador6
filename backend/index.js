@@ -140,10 +140,56 @@ function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// Ruta para obtener los turnos
-app.get('/turnos', (req, res) => {
-  const data = loadDB();
-  res.json(data);
+// Ruta directa para el panel de administración
+app.use(express.static(path.join(__dirname, 'public')));
+
+// === Obtener turnos con filtros opcionales ===
+app.get("/api/turnos", (req, res) => {
+  let db = loadDB();
+  const { fecha, etapa, orden = "fecha", sentido = "asc", pagina = 1, limite = 10, telefono, numero } = req.query;
+
+  // Filtros
+  if (fecha) {
+    db = db.filter(t => t.fecha.startsWith(fecha));
+  }
+  if (etapa) {
+    db = db.filter(t => t.etapa === etapa);
+  }
+  if (telefono) {
+    db = db.filter(t => t.telefono && t.telefono.includes(telefono));
+  }
+  if (numero) {
+    db = db.filter(t => t.numero === numero);
+  }
+
+  // Ordenamiento
+  db.sort((a, b) => {
+    let valorA = a[orden];
+    let valorB = b[orden];
+
+    if (orden === "fecha") {
+      valorA = new Date(valorA);
+      valorB = new Date(valorB);
+    }
+
+    if (valorA < valorB) return sentido === "asc" ? -1 : 1;
+    if (valorA > valorB) return sentido === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  // Paginación
+  const pag = parseInt(pagina);
+  const lim = parseInt(limite);
+  const inicio = (pag - 1) * lim;
+  const fin = inicio + lim;
+  const paginados = db.slice(inicio, fin);
+
+  res.json({
+    total: db.length,
+    pagina: pag,
+    limite: lim,
+    resultados: paginados
+  });
 });
 
 

@@ -65,6 +65,12 @@ app.post('/upload-turno', (req, res) => {
   });
 });
 
+// Ruta directa para el panel de administración
+app.get('/admin.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'Admin Panel de Turnos', 'admin.html'));
+});
+
+
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
