@@ -165,23 +165,25 @@
         .catch(console.error);
     }
 
-    // Función para descargar el ticket como imagen JPG
     function descargarTicket() {
-      const ticket = document.getElementById("ticket");
+  const ticket = document.getElementById('ticket');
 
-      // Puedes ocultar temporalmente elementos que no quieras que aparezcan en la imagen (no hay en este caso)
-
-      html2canvas(ticket, {
-        backgroundColor: "#ffffff",
-        scale: 2
-      }).then(canvas => {
-        // Crear enlace de descarga con imagen generada
-        const link = document.createElement("a");
-        link.download = `turno-bisono-${turnoActual ? turnoActual.numero : '0000'}.jpg`;
-        link.href = canvas.toDataURL("image/jpeg", 1.0);
-        link.click();
-      });
-    }
+  // Espera 100ms para que todo esté renderizado
+  setTimeout(() => {
+    html2canvas(ticket, {
+      backgroundColor: '#ffffff',
+      scale: 2
+    }).then(canvas => {
+      const enlace = document.createElement('a');
+      enlace.download = 'ticket-bisono.jpg';
+      enlace.href = canvas.toDataURL('image/jpeg', 1.0);
+      enlace.click();
+    }).catch(e => {
+      console.error('Error generando imagen:', e);
+      alert('Hubo un error generando la imagen');
+    });
+  }, 100);
+}
   </script>
 </body>
 </html>
