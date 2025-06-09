@@ -15,12 +15,10 @@ async function obtenerTurnos() {
     let turnos;
     try {
       const data = JSON.parse(text);
-
       if (!Array.isArray(data.resultados)) throw new Error("Respuesta no válida del servidor");
-
       turnos = data.resultados;
     } catch {
-      throw new Error("Respuesta no JSON válida: " + text);
+      throw new Error("Respuesta no es un JSON válido: " + text);
     }
 
     if (turnos.length === 0) {
@@ -32,17 +30,26 @@ async function obtenerTurnos() {
 
     turnos.forEach(turno => {
       const fila = document.createElement("tr");
+
+      const opcionesEstado = [
+        "Pendiente",
+        "Visitando Apartamentos Modelo",
+        "Precalificando con el Banco",
+        "OK",
+        "En Proceso",
+        "Finalizado"
+      ];
+
+      const opciones = opcionesEstado.map(estado =>
+        `<option value="${estado}" ${turno.etapa === estado ? "selected" : ""}>${estado}</option>`
+      ).join("");
+
       fila.innerHTML = `
         <td>${safe(turno.numero)}</td>
         <td>${safe(turno.etapa)}</td>
         <td>
           <select class="nuevo-estado">
-            <option value="Pendiente">Pendiente</option>
-            <option value="Visitando Apartamentos Modelo">Visitando Apartamentos Modelo</option>
-            <option value="Precalificando con el Banco">Precalificando con el Banco</option>
-            <option value="OK">OK</option>
-            <option value="En Proceso">En Proceso</option>
-            <option value="Finalizado">Finalizado</option>
+            ${opciones}
           </select>
         </td>
         <td><button class="cambiar-estado">Cambiar</button></td>
@@ -50,10 +57,12 @@ async function obtenerTurnos() {
         <td><button class="enviar-wsp">Enviar</button></td>
         <td class="resultado"></td>
       `;
+
       tabla.appendChild(fila);
     });
 
   } catch (error) {
-    tabla.innerHTML = `<tr><td colspan='7' class='error'>Error al cargar turnos: ${error.message}</td></tr>`;
+    console.error("Error al obtener turnos:", error);
+    tabla.innerHTML = `<tr><td colspan='7' class='error'>❌ Error al cargar turnos: ${error.message}</td></tr>`;
   }
 }
