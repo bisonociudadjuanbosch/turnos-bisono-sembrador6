@@ -1,72 +1,47 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const cors = require("cors");
-const axios = require("axios");
-require("dotenv").config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
-// Base de datos temporal en memoria
-let turnos = [
-  { numero: "001", estado: "Pendiente", telefono: "18091234567" },
-  { numero: "002", estado: "Pendiente", telefono: "18097654321" },
-  // Puedes añadir más turnos
-];
+// 📂 Usa la ruta absoluta del disco montado en Render
+const UPLOAD_FOLDER = "/uploads"; // debe coincidir con el mountPath
 
-// Cambiar estado y notificar al siguiente turno
-app.post("/cambiar-etapa", async (req, res) => {
-  const { numero, nuevaEtapa } = req.body;
-  const index = turnos.findIndex((t) => t.numero === numero);
-
-  if (index === -1) {
-    return res.status(404).json({ error: "Turno no encontrado" });
-  }
-
-  turnos[index].estado = nuevaEtapa;
-  console.log(`✅ Turno ${numero} cambiado a etapa: ${nuevaEtapa}`);
-
-  // Notificar al siguiente turno si existe
-  const siguienteTurno = turnos.find(
-    (t, i) => i > index && t.estado === "Pendiente"
-  );
-
-  if (siguienteTurno) {
-    try {
-      await enviarWhatsApp(siguienteTurno.telefono);
-      console.log(`📲 WhatsApp enviado a turno ${siguienteTurno.numero}`);
-    } catch (err) {
-      console.error("❌ Error enviando WhatsApp:", err.response?.data || err.message);
-    }
-  }
-
-  res.json({ success: true });
-});
-
-// Enviar mensaje de WhatsApp usando API oficial
-async function enviarWhatsApp(telefono) {
-  const token = "sk_33ed3140aca24e4c98cd75b52b5c7722";
-  const appId = "957b8460...";
-  const wabaId = "508852171945366";
-  const numeroTelefono = telefono.replace(/[^0-9]/g, "");
-
-  await axios.post(
-    `https://api.360dialog.io/v1/messages`,
-    {
-      to: `+${numeroTelefono}`,
-      type: "text",
-      text: { body: "¡Hola! es tu Turno, por favor acercate a nuestro Oficial de Ventas Bisonó." }
-    },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        "D360-API-KEY": token
-      }
-    }
-  );
+// Crea la carpeta si no existe
+if (!fs.existsSync(UPLOAD_FOLDER)) {
+  fs.mkdirSync(UPLOAD_FOLDER);
 }
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+// Sirve imágenes públicamente desde /turnos
+app.use("/turnos", express.static(UPLOAD_FOLDER));
+
+// Ruta para subir turno como imagen base64
+app.post("/upload-turno", (req, res) => {
+  const { image } = req.body;
+  if (!image)
+    return res.status(400).json({ error: "No se recibió imagen" });
+
+  const matches = image.match(/^data:image\/(jpeg|png);base64,(.+)$/);
+  if (!matches) return res.status(400).json({ error: "Formato inválido" });
+
+  const ext = matches[1] === "png" ? "png" : "jpg";
+  const base64Data = matches[2];
+  const filename = `turno_${Date.now()}.${ext}`;
+  const filePath = path.join(UPLOAD_FOLDER, filename);
+
+  fs.writeFile(filePath, base64Data, "base64", (err) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Fallo al guardar imagen" });
+    }
+    const url = `${req.protocol}://${req.get("host")}/turnos/${filename}`;
+    res.json({ url });
+  });
+});
+
+app.listen(process.env.PORT || 10000, () => {
+  console.log("Server running");
 });
