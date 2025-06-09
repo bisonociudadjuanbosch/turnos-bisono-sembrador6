@@ -66,6 +66,34 @@ async function enviarWhatsApp(telefono) {
   );
 }
 
+app.post('/subir-imagen', async (req, res) => {
+  try {
+    const { imagen } = req.body;
+
+    if (!imagen) {
+      return res.status(400).json({ error: 'Imagen no proporcionada' });
+    }
+
+    const resultado = await cloudinary.uploader.upload(imagen, {
+      folder: 'turnos-bisono',
+      format: 'jpg'
+    });
+
+    res.json({ url: resultado.secure_url });
+  } catch (error) {
+    console.error('Error al subir imagen:', error);
+    res.status(500).json({ error: 'Fallo al subir imagen' });
+  }
+});
+
+
+const cloudinary = require('cloudinary').v2;
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
