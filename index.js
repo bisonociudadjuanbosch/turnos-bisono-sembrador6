@@ -23,7 +23,9 @@ const ESTADOS = [
 
 // Middlewares
 app.use(cors());
-app.use(bodyParser.json({ limit: "10mb" }));
+app.use(express.json());
+
+let turnos = []; // O usa una base de datos real
 
 // Carpeta pública: index.html y admin.html dentro de /frontend
 const FRONTEND = path.join(__dirname, "frontend");
