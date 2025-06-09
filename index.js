@@ -1,11 +1,15 @@
-const express = require("express");
+const express = require('express');
 const fs = require("fs");
 const path = require("path");
+const bodyParser = require('body-parser');
 const cors = require("cors");
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 // 📂 Usa la ruta absoluta del disco montado en Render
 const UPLOAD_FOLDER = "/uploads"; // debe coincidir con el mountPath
