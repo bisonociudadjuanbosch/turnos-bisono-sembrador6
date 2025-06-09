@@ -70,6 +70,6 @@ app.post("/upload-turno", (req, res) => {
 
 // Arranca el servidor normalmente
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

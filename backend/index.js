@@ -89,9 +89,9 @@ app.post('/subir-imagen', async (req, res) => {
 
 const cloudinary = require('cloudinary').v2;
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  cloud_name: process.env.ddqfqruz7,
+  api_key: process.env.744665668414615,
+  api_secret: process.env.ceUU41MMd_rafp08bVqX7P4Raf4
 });
 
 const PORT = process.env.PORT || 10000;
