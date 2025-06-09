@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -74,8 +74,7 @@
       <p id="ticket-nombre"></p>
       <p id="ticket-telefono"></p>
     </div>
-    <br />
-    <button onclick="descargarTicket()">📸 Descargar Ticket</button>
+    <!-- Botón de descargar ticket eliminado según tu solicitud -->
   </div>
 
   <!-- Información fija / visualización general -->
@@ -108,7 +107,6 @@
   const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com";
   let turnoActual = null;
 
-  // Esta función es la que se usa en el form para generar turno desde datos ingresados
   async function generarTurno() {
     const nombre = document.querySelector("#nombre").value.trim();
     const telefono = document.querySelector("#telefono").value.trim();
@@ -130,16 +128,13 @@
       const data = await res.json();
       turnoActual = data;
 
-      // Ocultar formulario y mostrar pantalla de turno
       document.getElementById("formulario-turno").style.display = "none";
       document.getElementById("pantalla-turno").style.display = "block";
 
-      // Mostrar datos del turno generado
       document.getElementById("ticket-numero").textContent = data.numero;
       document.getElementById("ticket-nombre").textContent = `Nombre: ${data.nombre || ''}`;
       document.getElementById("ticket-telefono").textContent = `Teléfono: ${data.telefono || ''}`;
 
-      // También actualizar la info fija abajo con el último turno generado
       document.getElementById("numero-turno").textContent = data.numero;
 
       const ahora = new Date(data.createdAt || Date.now());
@@ -149,10 +144,8 @@
       });
       document.getElementById("fecha-hora").textContent = `Fecha y hora: ${fechaHora}`;
 
-      // Actualizar personas en espera (si tienes datos, sino 0)
       document.getElementById("en-espera").textContent = data.enEspera || 0;
 
-      // Iniciar verificación de estado
       setInterval(verificarEstadoTurno, 5000);
 
     } catch (error) {
@@ -161,9 +154,7 @@
     }
   }
 
-  // Esta función es para el botón que está abajo (usa el último turno o genera uno nuevo si no hay)
   function generarTurnoDesdeBoton() {
-    // Si ya hay un turno actual, solo actualiza info fija
     if (turnoActual) {
       document.getElementById("numero-turno").textContent = turnoActual.numero;
       const ahora = new Date(turnoActual.createdAt || Date.now());
@@ -178,7 +169,6 @@
     }
   }
 
-  // Verifica si el turno actual cambió de estado
   function verificarEstadoTurno() {
     if (!turnoActual || !turnoActual._id) return;
 
@@ -187,24 +177,11 @@
       .then(data => {
         if (["En Proceso", "Asistido", "Finalizado"].includes(data.estado)) {
           alert("¡Es tu turno! Acércate a nuestro Oficial de Ventas Bisonó.");
-          // Puedes detener el intervalo si quieres aquí
         }
       })
       .catch(console.error);
   }
 
-  // Descarga la vista del ticket generado en la pantalla de turno
-  function descargarTicket() {
-    const ticket = document.getElementById("ticket");
-    html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 }).then(canvas => {
-      const link = document.createElement("a");
-      link.download = "turno.jpg";
-      link.href = canvas.toDataURL("image/jpeg", 1.0);
-      link.click();
-    });
-  }
-
-  // Descarga el ticket fijo (abajo)
   function descargar() {
     const ticket = document.getElementById("ticket-fijo");
     const botones = document.querySelector(".botones");
@@ -219,7 +196,6 @@
     });
   }
 
-  // Compartir por WhatsApp con subida a backend
   async function compartirWhatsApp() {
     const ticket = document.getElementById("ticket-fijo");
     const botones = document.querySelector(".botones");
@@ -237,47 +213,29 @@
       const canvas = await html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 });
       const base64image = canvas.toDataURL("image/jpeg", 1.0);
 
-      const uploadResponse = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/upload-turno", {
+      const uploadResponse = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/upload-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64image })
+        body: JSON.stringify({ imageBase64: base64image })
       });
+      const uploadData = await uploadResponse.json();
+      if (!uploadData.url) throw new Error("No se pudo subir la imagen");
 
-      if (!uploadResponse.ok) throw new Error("No se pudo subir la imagen");
-
-      const { url } = await uploadResponse.json();
-
-      resultado.innerHTML = `<p>Tu imagen está disponible en: <a href="${url}" target="_blank">${url}</a></p>`;
-
-      const formData = new URLSearchParams();
-      formData.append("channel", "whatsapp");
-      formData.append("source", "18096690177");
-      formData.append("destination", numeroCliente);
-      formData.append("message", JSON.stringify({
-        type: "text",
-        text: `¡Hola! Ya tienes tu turno en Constructora Bisonó. Aquí está tu ticket:\n${url}`
-      }));
-      formData.append("src.name", "ConstructoraBisono");
-
-      const sendResponse = await fetch("https://api.gupshup.io/wa/api/v1/msg", {
+      const mensaje = `¡Hola! Este es tu turno en Constructora Bisonó: ${turnoActual ? turnoActual.numero : "N/A"}. ${uploadData.url}`;
+      const whatsappResponse = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/send-whatsapp", {
         method: "POST",
-        headers: {
-          "Cache-Control": "no-cache",
-          "Content-Type": "application/x-www-form-urlencoded",
-          "apikey": "mqlyqhzffbgosadyap1vz6qpt8qzltku"
-        },
-        body: formData
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telefono: numeroCliente, mensaje })
       });
+      const whatsappData = await whatsappResponse.json();
 
-      const sendResult = await sendResponse.json();
-      if (sendResult.status !== "submitted") {
-        throw new Error("No se pudo enviar el mensaje por WhatsApp");
+      if (whatsappData.success) {
+        resultado.textContent = "Mensaje enviado correctamente.";
+      } else {
+        resultado.textContent = "Error al enviar el mensaje.";
       }
-
-      alert("✅ Turno enviado exitosamente por WhatsApp.");
     } catch (error) {
-      console.error(error);
-      alert("❌ Error: " + error.message);
+      resultado.textContent = "Error: " + error.message;
     } finally {
       botones.style.display = "block";
     }
