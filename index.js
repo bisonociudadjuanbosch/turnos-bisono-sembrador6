@@ -1,259 +1,72 @@
-require("dotenv").config(); // Carga variables de entorno
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const axios = require("axios");
+require("dotenv").config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-
-// Estados válidos de un turno
-const ESTADOS = [
-  "Pendiente",
-  "Visitando Apartamentos Modelo",
-  "Precalificando con el Banco",
-  "OK",
-  "En Proceso",
-  "Finalizado",
-];
-
-// Middlewares
 app.use(cors());
 app.use(express.json());
 
-let turnos = []; // O usa una base de datos real
+// Base de datos temporal en memoria
+let turnos = [
+  { numero: "001", estado: "Pendiente", telefono: "18091234567" },
+  { numero: "002", estado: "Pendiente", telefono: "18097654321" },
+  // Puedes añadir más turnos
+];
 
-// Carpeta pública: index.html y admin.html dentro de /frontend
-const FRONTEND = path.join(__dirname, "frontend");
-app.use(express.static(FRONTEND));
-
-// Carpeta para tickets (imágenes)
-const TICKETS = path.join(__dirname, "tickets");
-if (!fs.existsSync(TICKETS)) fs.mkdirSync(TICKETS);
-app.use("/tickets", express.static(TICKETS));
-
-// Archivo base de datos local
-const DB_FILE = path.join(__dirname, "db.json");
-
-// Función para cargar DB (arreglo)
-function loadDB() {
-  if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, "[]");
-  return JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
-}
-
-// Guardar DB en archivo
-function saveDB(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-}
-
-// --------------------
-// Rutas y lógica
-// --------------------
-
-// 1. Subir imagen (ticket)
-app.post("/upload-turno", (req, res) => {
-  const { image } = req.body;
-  if (!image) return res.status(400).json({ error: "Falta imagen base64" });
-
-  // Validar que sea base64 de imagen jpg/png (opcional)
-  if (!image.startsWith("data:image/")) {
-    return res.status(400).json({ error: "Formato de imagen inválido" });
-  }
-
-  // Quitar prefijo base64
-  const b64 = image.replace(/^data:image\/\w+;base64,/, "");
-  const filename = `turno_${Date.now()}.jpg`;
-  const filepath = path.join(TICKETS, filename);
-
-  fs.writeFile(filepath, b64, "base64", (err) => {
-    if (err)
-      return res.status(500).json({ error: "No se pudo guardar la imagen" });
-
-    const url = `${req.protocol}://${req.get("host")}/tickets/${filename}`;
-    res.json({ url });
-  });
-});
-
-// 2. Generar nuevo turno
-app.post("/generar-turno", (req, res) => {
-  const { telefono } = req.body;
-
-  // Validación básica del teléfono (solo dígitos, longitud 10-13)
-  if (telefono && !/^\d{10,13}$/.test(telefono)) {
-    return res.status(400).json({ error: "Teléfono inválido" });
-  }
-
-  const db = loadDB();
-  const hoy = new Date().toISOString().slice(0, 10);
-
-  // Filtrar turnos del día
-  const hoyTurnos = db.filter((t) => t.fecha.startsWith(hoy));
-  const ultimo = hoyTurnos.length
-    ? hoyTurnos[hoyTurnos.length - 1].numero
-    : "T-0000";
-
-  const seq = parseInt(ultimo.split("-")[1]) + 1;
-
-  const nuevo = {
-    numero: `T-${seq.toString().padStart(4, "0")}`,
-    fecha: new Date().toISOString(),
-    etapa: "Pendiente",
-    telefono: telefono || "",
-    notificado: false, // para controlar notificaciones
-  };
-
-  db.push(nuevo);
-  saveDB(db);
-
-  res.json({
-    turno: nuevo,
-    enEspera: db.filter((t) => t.fecha.startsWith(hoy) && t.etapa === "Pendiente")
-      .length,
-  });
-});
-
-// 3. Notificar siguiente turno pendiente que tiene teléfono y NO ha sido notificado
-async function notificarSiguienteTurno(db) {
-  const sig = db.find(
-    (t) => t.etapa === "Pendiente" && t.telefono && !t.notificado
-  );
-  if (!sig) return;
-
-  const text = {
-    messaging_product: "whatsapp",
-    to: sig.telefono,
-    type: "text",
-    text: { body: "¡Hola! ya está tu turno. Por favor acércate." },
-  };
-
-  try {
-    await axios.post(
-      "https://graph.facebook.com/v19.0/18096690177/messages",
-      text,
-      {
-        headers: {
-          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    console.log("WhatsApp enviado a", sig.telefono);
-
-    // Marcar como notificado para no volver a enviar
-    sig.notificado = true;
-    saveDB(db);
-  } catch (e) {
-    console.error("Error al notificar:", e.response?.data || e.message);
-  }
-}
-
-// 4. Cambiar etapa y notificar siguiente turno
+// Cambiar estado y notificar al siguiente turno
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
+  const index = turnos.findIndex((t) => t.numero === numero);
 
-  // Validar etapa
-  if (!ESTADOS.includes(nuevaEtapa)) {
-    return res.status(400).json({ error: "Etapa inválida" });
+  if (index === -1) {
+    return res.status(404).json({ error: "Turno no encontrado" });
   }
 
-  const db = loadDB();
-  const i = db.findIndex((t) => t.numero === numero);
+  turnos[index].estado = nuevaEtapa;
+  console.log(`✅ Turno ${numero} cambiado a etapa: ${nuevaEtapa}`);
 
-  if (i === -1) return res.status(404).json({ error: "Turno no encontrado" });
+  // Notificar al siguiente turno si existe
+  const siguienteTurno = turnos.find(
+    (t, i) => i > index && t.estado === "Pendiente"
+  );
 
-  db[i].etapa = nuevaEtapa;
-
-  // Reset notificado si regresa a Pendiente
-  if (nuevaEtapa === "Pendiente") {
-    db[i].notificado = false;
+  if (siguienteTurno) {
+    try {
+      await enviarWhatsApp(siguienteTurno.telefono);
+      console.log(`📲 WhatsApp enviado a turno ${siguienteTurno.numero}`);
+    } catch (err) {
+      console.error("❌ Error enviando WhatsApp:", err.response?.data || err.message);
+    }
   }
 
-  saveDB(db);
-
-  // Solo notificar si se avanza en la etapa, no si vuelve a "Pendiente"
-  if (nuevaEtapa !== "Pendiente") {
-    await notificarSiguienteTurno(db);
-  }
-
-  res.json({ turno: db[i] });
+  res.json({ success: true });
 });
 
-// 5. Obtener turnos con filtros, paginación y orden
-app.get("/turnos", (req, res) => {
-  let db = loadDB();
+// Enviar mensaje de WhatsApp usando API oficial
+async function enviarWhatsApp(telefono) {
+  const token = "sk_33ed3140aca24e4c98cd75b52b5c7722";
+  const appId = "957b8460...";
+  const wabaId = "508852171945366";
+  const numeroTelefono = telefono.replace(/[^0-9]/g, "");
 
-  const {
-    fecha,
-    etapa,
-    telefono,
-    numero,
-    pagina = 1,
-    limite = 10,
-    orden = "fecha",
-    sentido = "asc",
-  } = req.query;
+  await axios.post(
+    `https://api.360dialog.io/v1/messages`,
+    {
+      to: `+${numeroTelefono}`,
+      type: "text",
+      text: { body: "¡Hola! es tu Turno, por favor acercate a nuestro Oficial de Ventas Bisonó." }
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "D360-API-KEY": token
+      }
+    }
+  );
+}
 
-  if (fecha) db = db.filter((t) => t.fecha.startsWith(fecha));
-  if (etapa) db = db.filter((t) => t.etapa === etapa);
-  if (telefono) db = db.filter((t) => t.telefono.includes(telefono));
-  if (numero) db = db.filter((t) => t.numero === numero);
-
-  db.sort((a, b) => {
-    let va = orden === "fecha" ? new Date(a[orden]) : a[orden];
-    let vb = orden === "fecha" ? new Date(b[orden]) : b[orden];
-    return sentido === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : va > vb ? -1 : va < vb ? 1 : 0;
-  });
-
-  const p = parseInt(pagina);
-  const l = parseInt(limite);
-  const total = db.length;
-  const resultados = db.slice((p - 1) * l, p * l);
-
-  res.json({ total, pagina: p, limite: l, resultados });
-});
-
-// 6. Registrar turno manualmente con datos completos
-app.post("/turnos", (req, res) => {
-  const { numero, fechaHora, nombre, telefono, etapa } = req.body;
-
-  if (!numero || !fechaHora || !nombre || !telefono || !etapa) {
-    return res.status(400).json({ error: "Faltan campos requeridos" });
-  }
-
-  if (!ESTADOS.includes(etapa)) {
-    return res.status(400).json({ error: "Etapa inválida" });
-  }
-
-  const db = loadDB();
-
-  // Validar que no exista ya un turno con ese número
-  if (db.some(t => t.numero === numero)) {
-    return res.status(409).json({ error: "El número de turno ya existe" });
-  }
-
-  const nuevo = {
-    numero,
-    fecha: new Date().toISOString(),
-    fechaHora,
-    nombre,
-    telefono,
-    etapa,
-    notificado: false,
-  };
-
-  db.push(nuevo);
-  saveDB(db);
-
-  res.status(201).json({ message: "Turno registrado con éxito", turno: nuevo });
-});
-
-
-// Servidor
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
