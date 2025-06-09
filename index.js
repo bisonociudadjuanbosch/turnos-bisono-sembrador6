@@ -215,6 +215,42 @@ app.get("/turnos", (req, res) => {
   res.json({ total, pagina: p, limite: l, resultados });
 });
 
+// 6. Registrar turno manualmente con datos completos
+app.post("/turnos", (req, res) => {
+  const { numero, fechaHora, nombre, telefono, etapa } = req.body;
+
+  if (!numero || !fechaHora || !nombre || !telefono || !etapa) {
+    return res.status(400).json({ error: "Faltan campos requeridos" });
+  }
+
+  if (!ESTADOS.includes(etapa)) {
+    return res.status(400).json({ error: "Etapa inválida" });
+  }
+
+  const db = loadDB();
+
+  // Validar que no exista ya un turno con ese número
+  if (db.some(t => t.numero === numero)) {
+    return res.status(409).json({ error: "El número de turno ya existe" });
+  }
+
+  const nuevo = {
+    numero,
+    fecha: new Date().toISOString(),
+    fechaHora,
+    nombre,
+    telefono,
+    etapa,
+    notificado: false,
+  };
+
+  db.push(nuevo);
+  saveDB(db);
+
+  res.status(201).json({ message: "Turno registrado con éxito", turno: nuevo });
+});
+
+
 // Servidor
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);

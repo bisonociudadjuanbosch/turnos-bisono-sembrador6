@@ -39,6 +39,35 @@ app.post('/upload-turno', (req, res) => {
   });
 });
 
+// 1. Subir imagen (ticket) - versión robusta
+app.post("/upload-turno", (req, res) => {
+  const { image } = req.body;
+
+  if (!image) {
+    return res.status(400).json({ error: "No se recibió imagen" });
+  }
+
+  const matches = image.match(/^data:image\/(png|jpeg);base64,(.+)$/);
+  if (!matches) {
+    return res.status(400).json({ error: "Formato de imagen inválido" });
+  }
+
+  const ext = matches[1] === "png" ? "png" : "jpg";
+  const base64Data = matches[2];
+  const fileName = `turno_${Date.now()}.${ext}`;
+  const filePath = path.join(TICKETS, fileName);
+
+  fs.writeFile(filePath, base64Data, "base64", (err) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error al guardar imagen" });
+    }
+
+    const url = `${req.protocol}://${req.get("host")}/tickets/${fileName}`;
+    res.json({ url });
+  });
+});
+
 // Arranca el servidor normalmente
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
