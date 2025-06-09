@@ -1,9 +1,10 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Turno - Constructora Bisonó</title>
+  <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style>
     body {
@@ -13,58 +14,38 @@
       background-color: #f9f9f9;
     }
 
-    #formulario-turno {
-      max-width: 350px;
-      margin: 20px auto;
+    .ticket {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 400px;
+      margin: auto;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
     }
 
-    input[type="text"], input[type="tel"] {
-      width: 100%;
-      padding: 10px;
-      margin: 8px 0;
-      box-sizing: border-box;
-      font-size: 16px;
+    .turno-grande {
+      font-size: 48px;
+      font-weight: bold;
+      margin: 20px 0;
     }
 
-    button {
+    .botones {
+      margin-top: 20px;
+    }
+
+    .botones button {
+      margin: 5px;
       padding: 10px 15px;
-      font-size: 16px;
+      font-size: 14px;
       border: none;
       background-color: #007bff;
       color: white;
       border-radius: 8px;
       cursor: pointer;
-      margin: 5px;
     }
 
-    button:hover {
+    .botones button:hover {
       background-color: #0056b3;
-    }
-
-    #pantalla-turno {
-      display: none;
-      margin-top: 30px;
-    }
-
-    #ticket {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      max-width: 350px;
-      margin: auto;
-      box-shadow: 0 0 15px rgba(0,0,0,0.1);
-      border: 2px dashed #333;
-    }
-
-    #ticket h2 {
-      margin-bottom: 10px;
-    }
-
-    #ticket-numero {
-      font-size: 4em;
-      font-weight: bold;
-      margin: 20px 0;
-      color: #007bff;
     }
 
     #resultado {
@@ -72,118 +53,236 @@
       font-size: 14px;
       color: #333;
     }
-
-    .botones {
-      margin-top: 20px;
-    }
   </style>
 </head>
 <body>
 
-  <!-- Formulario para generar turno -->
+  <!-- Formulario para pedir datos al usuario -->
   <div id="formulario-turno">
     <form onsubmit="event.preventDefault(); generarTurno();">
       <input id="nombre" type="text" placeholder="Tu nombre" required />
-      <input id="telefono" type="tel" placeholder="Tu teléfono" required />
+      <input id="telefono" type="tel" placeholder="Tu teléfono" required pattern="[0-9]{10,15}" />
       <button type="submit">Generar Turno</button>
     </form>
   </div>
 
-  <!-- Pantalla que muestra el turno generado -->
-  <div id="pantalla-turno">
-    <div id="ticket">
+  <!-- Vista para mostrar turno generado -->
+  <div id="pantalla-turno" style="display:none; text-align:center;">
+    <div id="ticket" style="border:2px dashed #333; padding:20px; width:300px; margin:auto;">
       <h2>Turno Bisonó</h2>
-      <div id="ticket-numero">T-0000</div>
-      <p id="ticket-nombre">Nombre: </p>
-      <p id="ticket-telefono">Teléfono: </p>
+      <p id="ticket-numero" style="font-size: 3em;"></p>
+      <p id="ticket-nombre"></p>
+      <p id="ticket-telefono"></p>
     </div>
+    <br />
     <button onclick="descargarTicket()">📸 Descargar Ticket</button>
+  </div>
+
+  <!-- Información fija / visualización general -->
+  <div id="ticket-fijo" class="ticket" style="margin-top: 40px;">
+    <h1>Constructora Bisonó</h1>
+    <p><strong>Calle Olof Palme, esquina Av. Luperón</strong><br>
+    Distrito Nacional, República Dominicana<br>
+    Tel: 809-548-6353</p>
+
+    <h3 style="margin-top: 20px;">Residencial El Sembrador VI</h3>
+    <p><strong>Ciudad Juan Bosch</strong><br>Santo Domingo Este</p>
+
+    <h2 style="margin-top: 30px;">TURNO</h2>
+    <div id="numero-turno" class="turno-grande">T-0000</div>
+    <div id="fecha-hora" style="margin-bottom: 10px;"></div>
+    <p>Cantidad de personas en espera: <span id="en-espera">0</span></p>
+  </div>
+
+  <div class="botones">
+    <button onclick="generarTurnoDesdeBoton()">Generar Turno</button>
+    <button onclick="descargar()">Descargar Turno</button>
+    <button onclick="compartirWhatsApp()">Compartir por WhatsApp</button>
+    <button onclick="location.href='cotizacion.html'">Ir a Cotización</button>
+    <button onclick="location.href='admin.html'">Panel de Administración</button>
   </div>
 
   <div id="resultado"></div>
 
-  <script>
-    // URL base de tu backend (ajusta si es necesario)
-    const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com";
+<script>
+  const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com";
+  let turnoActual = null;
 
-    // Variable para guardar turno actual
-    let turnoActual = null;
+  // Esta función es la que se usa en el form para generar turno desde datos ingresados
+  async function generarTurno() {
+    const nombre = document.querySelector("#nombre").value.trim();
+    const telefono = document.querySelector("#telefono").value.trim();
 
-    // Función para generar turno y mostrar ticket
-    function generarTurno() {
-      const nombre = document.getElementById("nombre").value.trim();
-      const telefono = document.getElementById("telefono").value.trim();
+    if (!nombre || !telefono.match(/^\d{10,15}$/)) {
+      alert("Por favor ingresa un nombre válido y un teléfono válido (10-15 dígitos).");
+      return;
+    }
 
-      if (!nombre || !telefono) {
-        alert("Por favor completa todos los campos.");
-        return;
-      }
-
-      fetch(`${backendURL}/generar-turno`, {
+    try {
+      const res = await fetch(`${backendURL}/generar-turno`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nombre, telefono })
-      })
+      });
+
+      if (!res.ok) throw new Error("No se pudo generar el turno");
+
+      const data = await res.json();
+      turnoActual = data;
+
+      // Ocultar formulario y mostrar pantalla de turno
+      document.getElementById("formulario-turno").style.display = "none";
+      document.getElementById("pantalla-turno").style.display = "block";
+
+      // Mostrar datos del turno generado
+      document.getElementById("ticket-numero").textContent = data.numero;
+      document.getElementById("ticket-nombre").textContent = `Nombre: ${data.nombre || ''}`;
+      document.getElementById("ticket-telefono").textContent = `Teléfono: ${data.telefono || ''}`;
+
+      // También actualizar la info fija abajo con el último turno generado
+      document.getElementById("numero-turno").textContent = data.numero;
+
+      const ahora = new Date(data.createdAt || Date.now());
+      const fechaHora = ahora.toLocaleString("es-DO", {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+      document.getElementById("fecha-hora").textContent = `Fecha y hora: ${fechaHora}`;
+
+      // Actualizar personas en espera (si tienes datos, sino 0)
+      document.getElementById("en-espera").textContent = data.enEspera || 0;
+
+      // Iniciar verificación de estado
+      setInterval(verificarEstadoTurno, 5000);
+
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al generar el turno.");
+    }
+  }
+
+  // Esta función es para el botón que está abajo (usa el último turno o genera uno nuevo si no hay)
+  function generarTurnoDesdeBoton() {
+    // Si ya hay un turno actual, solo actualiza info fija
+    if (turnoActual) {
+      document.getElementById("numero-turno").textContent = turnoActual.numero;
+      const ahora = new Date(turnoActual.createdAt || Date.now());
+      const fechaHora = ahora.toLocaleString("es-DO", {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+      document.getElementById("fecha-hora").textContent = `Fecha y hora: ${fechaHora}`;
+      document.getElementById("en-espera").textContent = turnoActual.enEspera || 0;
+    } else {
+      alert("Por favor completa el formulario y genera un turno.");
+    }
+  }
+
+  // Verifica si el turno actual cambió de estado
+  function verificarEstadoTurno() {
+    if (!turnoActual || !turnoActual._id) return;
+
+    fetch(`${backendURL}/turnos/${turnoActual._id}`)
       .then(res => res.json())
       .then(data => {
-        if (!data.numero) {
-          alert("Error al generar turno.");
-          return;
+        if (["En Proceso", "Asistido", "Finalizado"].includes(data.estado)) {
+          alert("¡Es tu turno! Acércate a nuestro Oficial de Ventas Bisonó.");
+          // Puedes detener el intervalo si quieres aquí
         }
-        turnoActual = data;
-
-        // Ocultar formulario y mostrar pantalla del turno
-        document.getElementById("formulario-turno").style.display = "none";
-        document.getElementById("pantalla-turno").style.display = "block";
-
-        // Mostrar datos en el ticket
-        document.getElementById("ticket-numero").textContent = data.numero;
-        document.getElementById("ticket-nombre").textContent = `Nombre: ${data.nombre || ''}`;
-        document.getElementById("ticket-telefono").textContent = `Teléfono: ${data.telefono || ''}`;
-
-        // Iniciar la verificación periódica de estado
-        setInterval(verificarEstadoTurno, 5000);
       })
-      .catch(err => {
-        console.error(err);
-        alert("Hubo un error al generar el turno");
-      });
-    }
+      .catch(console.error);
+  }
 
-    // Función para verificar si el turno está en estado "En Proceso", "Asistido" o "Finalizado"
-    function verificarEstadoTurno() {
-      if (!turnoActual || !turnoActual._id) return;
-
-      fetch(`${backendURL}/turnos/${turnoActual._id}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.estado === "En Proceso" || data.estado === "Asistido" || data.estado === "Finalizado") {
-            alert("¡Es tu turno! Acércate a nuestro Oficial de Ventas Bisonó.");
-            // Opcional: detener el intervalo si quieres
-          }
-        })
-        .catch(console.error);
-    }
-
-    function descargarTicket() {
-  const ticket = document.getElementById('ticket');
-
-  // Espera 100ms para que todo esté renderizado
-  setTimeout(() => {
-    html2canvas(ticket, {
-      backgroundColor: '#ffffff',
-      scale: 2
-    }).then(canvas => {
-      const enlace = document.createElement('a');
-      enlace.download = 'ticket-bisono.jpg';
-      enlace.href = canvas.toDataURL('image/jpeg', 1.0);
-      enlace.click();
-    }).catch(e => {
-      console.error('Error generando imagen:', e);
-      alert('Hubo un error generando la imagen');
+  // Descarga la vista del ticket generado en la pantalla de turno
+  function descargarTicket() {
+    const ticket = document.getElementById("ticket");
+    html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 }).then(canvas => {
+      const link = document.createElement("a");
+      link.download = "turno.jpg";
+      link.href = canvas.toDataURL("image/jpeg", 1.0);
+      link.click();
     });
-  }, 100);
-}
-  </script>
+  }
+
+  // Descarga el ticket fijo (abajo)
+  function descargar() {
+    const ticket = document.getElementById("ticket-fijo");
+    const botones = document.querySelector(".botones");
+    botones.style.display = "none";
+
+    html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 }).then(canvas => {
+      botones.style.display = "block";
+      const link = document.createElement("a");
+      link.download = "turno.jpg";
+      link.href = canvas.toDataURL("image/jpeg", 1.0);
+      link.click();
+    });
+  }
+
+  // Compartir por WhatsApp con subida a backend
+  async function compartirWhatsApp() {
+    const ticket = document.getElementById("ticket-fijo");
+    const botones = document.querySelector(".botones");
+    const resultado = document.getElementById("resultado");
+
+    const numeroCliente = prompt("Ingresa tu número de WhatsApp (ej. 18091234567):");
+    if (!numeroCliente || !/^\d{10,15}$/.test(numeroCliente)) {
+      alert("Número inválido.");
+      return;
+    }
+
+    botones.style.display = "none";
+
+    try {
+      const canvas = await html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 });
+      const base64image = canvas.toDataURL("image/jpeg", 1.0);
+
+      const uploadResponse = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/upload-turno", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64image })
+      });
+
+      if (!uploadResponse.ok) throw new Error("No se pudo subir la imagen");
+
+      const { url } = await uploadResponse.json();
+
+      resultado.innerHTML = `<p>Tu imagen está disponible en: <a href="${url}" target="_blank">${url}</a></p>`;
+
+      const formData = new URLSearchParams();
+      formData.append("channel", "whatsapp");
+      formData.append("source", "18096690177");
+      formData.append("destination", numeroCliente);
+      formData.append("message", JSON.stringify({
+        type: "text",
+        text: `¡Hola! Ya tienes tu turno en Constructora Bisonó. Aquí está tu ticket:\n${url}`
+      }));
+      formData.append("src.name", "ConstructoraBisono");
+
+      const sendResponse = await fetch("https://api.gupshup.io/wa/api/v1/msg", {
+        method: "POST",
+        headers: {
+          "Cache-Control": "no-cache",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "apikey": "mqlyqhzffbgosadyap1vz6qpt8qzltku"
+        },
+        body: formData
+      });
+
+      const sendResult = await sendResponse.json();
+      if (sendResult.status !== "submitted") {
+        throw new Error("No se pudo enviar el mensaje por WhatsApp");
+      }
+
+      alert("✅ Turno enviado exitosamente por WhatsApp.");
+    } catch (error) {
+      console.error(error);
+      alert("❌ Error: " + error.message);
+    } finally {
+      botones.style.display = "block";
+    }
+  }
+</script>
+
 </body>
 </html>
