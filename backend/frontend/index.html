@@ -196,49 +196,57 @@
   }
 
   async function compartirWhatsApp() {
-    const ticket = document.getElementById("ticket-fijo");
-    const botones = document.querySelector(".botones");
-    const resultado = document.getElementById("resultado");
+  const ticket = document.getElementById("ticket-fijo");
+  const botones = document.querySelector(".botones");
+  const resultado = document.getElementById("resultado");
 
-    const numeroCliente = prompt("Ingresa tu número de WhatsApp (ej. 18091234567):");
-    if (!numeroCliente || !/^\d{10,15}$/.test(numeroCliente)) {
-      alert("Número inválido.");
-      return;
-    }
-
-    botones.style.display = "none";
-
-    try {
-      const canvas = await html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 });
-      const base64image = canvas.toDataURL("image/jpeg", 1.0);
-
-      const uploadResponse = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/upload-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64image })
-      });
-      const uploadData = await uploadResponse.json();
-      if (!uploadData.url) throw new Error("No se pudo subir la imagen");
-
-      const mensaje = `¡Hola! Este es tu turno en Constructora Bisonó: ${turnoActual ? turnoActual.numero : "N/A"}. ${uploadData.url}`;
-      const whatsappResponse = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/send-whatsapp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ telefono: numeroCliente, mensaje })
-      });
-      const whatsappData = await whatsappResponse.json();
-
-      if (whatsappData.success) {
-        resultado.textContent = "Mensaje enviado correctamente.";
-      } else {
-        resultado.textContent = "Error al enviar el mensaje.";
-      }
-    } catch (error) {
-      resultado.textContent = "Error: " + error.message;
-    } finally {
-      botones.style.display = "block";
-    }
+  const numeroCliente = prompt("Ingresa tu número de WhatsApp (ej. 18091234567):");
+  if (!numeroCliente || !/^\d{10,15}$/.test(numeroCliente)) {
+    alert("Número inválido.");
+    return;
   }
+
+  botones.style.display = "none";
+
+  try {
+    // Capturar el ticket como imagen
+    const canvas = await html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 });
+    const base64image = canvas.toDataURL("image/jpeg", 1.0);
+
+    // Subir imagen al backend
+    const uploadResponse = await fetch(`${backendURL}/upload-turno`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: base64image })
+    });
+    const uploadData = await uploadResponse.json();
+    if (!uploadData.url) throw new Error("No se pudo subir la imagen");
+
+    // Construir mensaje
+    const mensaje = `¡Hola! Este es tu turno en Constructora Bisonó: ${turnoActual ? turnoActual.numero : "N/A"}.\n${uploadData.url}`;
+    const encodedMsg = encodeURIComponent(mensaje);
+
+    // Enviar mensaje por Gupshup API
+    await fetch("https://api.gupshup.io/wa/api/v1/msg", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "apikey": "mqlyqhzffbgosadyap1vz6qpt8qzltku"
+      },
+      body: `channel=whatsapp&source=18096690177&destination=${numeroCliente}&message=${encodeURIComponent(JSON.stringify({ type: "text", text: mensaje }))}&src.name=ConstructoraBisono`
+    });
+
+    // Abrir WhatsApp Web como respaldo
+    window.open(`https://wa.me/${numeroCliente}?text=${encodedMsg}`, "_blank");
+
+    resultado.textContent = "📨 Tu imagen está disponible en:\n" + uploadData.url;
+  } catch (error) {
+    resultado.textContent = "❌ Ocurrió un error: " + error.message;
+  } finally {
+    botones.style.display = "block";
+  }
+}
+
 </script>
 
 </body>

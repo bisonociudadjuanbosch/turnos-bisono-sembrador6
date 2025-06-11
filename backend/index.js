@@ -48,7 +48,7 @@ app.post("/cambiar-etapa", async (req, res) => {
   res.json({ success: true });
 });
 
-// Función para enviar notificación por WhatsApp
+// Función para enviar notificación por WhatsApp usando 360dialog (puedes cambiar si usas Gupshup)
 async function enviarWhatsApp(telefono) {
   const token = process.env.WHATSAPP_API_KEY;
   await axios.post("https://api.360dialog.io/v1/messages", {
@@ -62,6 +62,36 @@ async function enviarWhatsApp(telefono) {
     }
   });
 }
+
+// Endpoint para enviar WhatsApp vía Gupshup con JSON {numeroTelefono, mensaje}
+app.post("/enviar-whatsapp", async (req, res) => {
+  const { numeroTelefono, mensaje } = req.body;
+
+  if (!numeroTelefono || !mensaje) {
+    return res.status(400).json({ error: "Faltan parámetros: numeroTelefono y mensaje son requeridos" });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append("channel", "whatsapp");
+    params.append("source", process.env.WHATSAPP_NUMERO_ORIGEN); // tu número origen en .env
+    params.append("destination", numeroTelefono);
+    params.append("message", JSON.stringify({ type: "text", text: mensaje }));
+    params.append("src.name", process.env.WHATSAPP_APP_ID); // tu App ID en .env
+
+    const response = await axios.post("https://api.gupshup.io/sm/api/v1/msg", params, {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "apikey": process.env.WHATSAPP_API_KEY, // tu api key en .env
+      },
+    });
+
+    return res.json({ success: true, data: response.data });
+  } catch (error) {
+    console.error("Error enviando WhatsApp:", error.response?.data || error.message);
+    return res.status(500).json({ error: "Error al enviar mensaje vía Gupshup" });
+  }
+});
 
 // Endpoint para subir imagen y devolver URL
 app.post("/subir-imagen", (req, res) => {
@@ -90,4 +120,3 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
-
