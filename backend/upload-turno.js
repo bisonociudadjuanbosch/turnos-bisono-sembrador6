@@ -22,6 +22,19 @@ let turnos = [];
 // Obtener todos los turnos
 app.get("/turnos", (req, res) => res.json(turnos));
 
+// Agregar nuevo turno
+app.post("/agregar-turno", (req, res) => {
+  const { numero, telefono, etapa = "Pendiente" } = req.body;
+  if (!numero || !telefono) {
+    return res.status(400).json({ error: "Faltan campos obligatorios" });
+  }
+  if (turnos.find(t => t.numero === numero)) {
+    return res.status(409).json({ error: "Turno ya existe" });
+  }
+  turnos.push({ numero, telefono, etapa });
+  res.json({ success: true, turno: { numero, telefono, etapa } });
+});
+
 // Cambiar estado y notificar siguiente en pendiente
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
@@ -44,14 +57,14 @@ app.post("/cambiar-etapa", async (req, res) => {
   res.json({ success: true });
 });
 
+// Función para enviar WhatsApp
 async function enviarWhatsApp(telefono) {
   const token = process.env.WHATSAPP_API_KEY;
   await axios.post("https://api.360dialog.io/v1/messages", {
     to: `+${telefono.replace(/\D/g, "")}`,
     type: "text",
     text: {
-      body:
-        "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó."
+      body: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó."
     }
   }, {
     headers: {
