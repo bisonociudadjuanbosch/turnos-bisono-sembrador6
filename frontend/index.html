@@ -105,6 +105,7 @@
     }
 
     async function compartirWhatsApp() {
+<<<<<<< HEAD
       const ticket = document.getElementById("ticket");
       const botones = document.querySelector(".botones");
       botones.style.display = "none";
@@ -131,6 +132,40 @@
         alert("Ocurrió un error al compartir.");
       }
     }
+=======
+  const ticket = document.getElementById("ticket");
+  const botones = document.querySelector(".botones");
+  botones.style.display = "none";
+
+  try {
+    const canvas = await html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 });
+    const base64image = canvas.toDataURL("image/jpeg", 1.0);
+    botones.style.display = "block";
+
+    const res = await fetch(`${backendURL}/upload-turno`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: base64image })
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.url) {
+      const nombre = document.getElementById("nombre").value.trim();
+      const mensaje = encodeURIComponent(`¡Hola ${nombre}! Aquí está tu turno de Constructora Bisonó: ${data.url}`);
+      window.open(`https://wa.me/?text=${mensaje}`, "_blank");
+    } else {
+      throw new Error(data.error || "Error al subir la imagen");
+    }
+
+  } catch (err) {
+    console.error("Error compartiendo por WhatsApp:", err);
+    alert("Ocurrió un error: " + err.message);
+    botones.style.display = "block";
+  }
+}
+
+>>>>>>> nombre-de-tu-rama
   </script>
 
 </body>

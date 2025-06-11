@@ -1,0 +1,33 @@
+# Ignorar node_modules en cualquier parte del proyecto
+**/node_modules/
+
+# Ignorar archivos temporales
+*.log
+*.tmp
+*.swp
+
+# Ignorar archivos de entorno (variables secretas, claves API, etc.)
+.env
+
+# Ignorar lockfiles si usas yarn o no quieres subirlos
+yarn.lock
+pnpm-lock.yaml
+
+# Build / distribución
+dist/
+build/
+
+# Ignorar sistema operativo
+.DS_Store
+Thumbs.db
+
+# Render: ignora logs y carpetas que no necesitas subir
+*.sqlite
+.nyc_output
+coverage/
+
+# Archivos generados por npm link o symlink rotos
+*.tgz
+
+# Cache de VS Code
+.vscode/

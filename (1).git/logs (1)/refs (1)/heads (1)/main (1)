@@ -1,0 +1,48 @@
+0000000000000000000000000000000000000000 aa19a464d64fcaf3fab17195296ef1cee936c549 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749307465 -0400	commit (initial): First commit
+aa19a464d64fcaf3fab17195296ef1cee936c549 aa19a464d64fcaf3fab17195296ef1cee936c549 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749307479 -0400	Branch: renamed refs/heads/master to refs/heads/main
+aa19a464d64fcaf3fab17195296ef1cee936c549 8281f5601a9217192cce5816bce3411bcb812c05 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749309123 -0400	commit: segundo commit
+8281f5601a9217192cce5816bce3411bcb812c05 8c2353512ef8f7e6b422f1b211d0234d6243432d bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749312368 -0400	commit: conectado frontend con backend en reder
+8c2353512ef8f7e6b422f1b211d0234d6243432d 3fa9e9afe7b3b18461fcf951a517e35999ef54a4 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749314620 -0400	commit: feat: Añadido endpoint /upload para compartir turnos como imagen JPG
+3fa9e9afe7b3b18461fcf951a517e35999ef54a4 fbea9ca265e3bc79426f44ea64a7f6320403b6cb bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749315931 -0400	commit: Agrega script start en package.json
+fbea9ca265e3bc79426f44ea64a7f6320403b6cb 7f6d26d2579d55da76c4655ea143f669e7b3679b bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749316145 -0400	commit: Agrega script start raiz para render
+7f6d26d2579d55da76c4655ea143f669e7b3679b 4ade25679cc03a4d71d1e172e39389b446e3e7e0 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749316417 -0400	commit: Usa process.env.PORT para compatibilidad con Render
+4ade25679cc03a4d71d1e172e39389b446e3e7e0 c4dad923acaa88b809527a4dac55c3ece0ae6e96 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749316737 -0400	commit: Corrige ubicación de .gitignore y limpia archivos innecesarios
+c4dad923acaa88b809527a4dac55c3ece0ae6e96 1a7db1752c79b1ae38e1bddc4a8ef735823cfbba bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749317975 -0400	commit: actualización: función compartir whatsapp con imagen
+1a7db1752c79b1ae38e1bddc4a8ef735823cfbba f64545bcee1a2dceda3fa1f04b25a1eb166a9cc2 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749318118 -0400	commit: actualizar referencia de submódulo frontend
+f64545bcee1a2dceda3fa1f04b25a1eb166a9cc2 c7edcefa866679b6caeeb8f7bc064fc17a06906f bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749319496 -0400	commit: Agregar carpeta tickets con archivo .keep para Render
+c7edcefa866679b6caeeb8f7bc064fc17a06906f 81d9d1a8a6d85bbd09d910c28a466492a099319a bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749319621 -0400	commit: Incluyendo carpeta tickets con archivo .keep
+81d9d1a8a6d85bbd09d910c28a466492a099319a 6d477ae5f4be02e99fb95e309085abb337737b65 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749320008 -0400	commit: Corregido error de sintaxis en package.json
+6d477ae5f4be02e99fb95e309085abb337737b65 cda6a4dd71990669375fe4df4603d14ce5d4d8ed bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749320401 -0400	commit: Correción final de sintaxis en package.json
+cda6a4dd71990669375fe4df4603d14ce5d4d8ed 83504f0359ff99ff77d178551347f79ed3924c71 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749320619 -0400	commit: Agrengando multer para manejo de archivos
+83504f0359ff99ff77d178551347f79ed3924c71 5466d5bd0e54e51660ebf67482b40bed884797c0 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749321413 -0400	commit: Proyecto Constructora Bisono: backend y frontend para sistema de turnos
+5466d5bd0e54e51660ebf67482b40bed884797c0 b8955c4acb59c6b7cbff094954211fc4a3f64f16 bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749322029 -0400	commit: Convertir backend/turnos-bisono-sembrador6 en carpeta normal, eliminar submódulo
+b8955c4acb59c6b7cbff094954211fc4a3f64f16 db6d51f03f863201735690766f07fd9b69c10f7c bisonociudadjuanbosch <bisonociudadjuanbosch@cbisono.com> 1749322867 -0400	commit: cambios en index.js
+db6d51f03f863201735690766f07fd9b69c10f7c c60ac6295b6fd271dc2031e51e4affe8c851c40b unknown <bisonociudadjuanbosh@cbisono.com> 1749388185 -0400	commit: Actualizacion index.js
+c60ac6295b6fd271dc2031e51e4affe8c851c40b 0b3481a5b443e764c447302000fbd536472f370f unknown <bisonociudadjuanbosh@cbisono.com> 1749392384 -0400	commit: Actualizar backend/index.js, backend/turnos-bisono-sembrador6, frontend, index.js
+0b3481a5b443e764c447302000fbd536472f370f 406aa2b498a403cae86052c2aa1b3d704d53d3f7 unknown <bisonociudadjuanbosh@cbisono.com> 1749392680 -0400	commit: Actualizar index.js
+406aa2b498a403cae86052c2aa1b3d704d53d3f7 50b6b7475c1bb4860fdb24caf1618ba62e53cdf7 unknown <bisonociudadjuanbosh@cbisono.com> 1749392962 -0400	commit: Actualizar index.js
+50b6b7475c1bb4860fdb24caf1618ba62e53cdf7 f08cc045c9c882c9dd2ebf4a9297009dc0a6d32c unknown <bisonociudadjuanbosh@cbisono.com> 1749393467 -0400	commit: Actualizar index.js
+f08cc045c9c882c9dd2ebf4a9297009dc0a6d32c 8297693eb13b203e67710886a8c804526e1284a9 unknown <bisonociudadjuanbosh@cbisono.com> 1749393934 -0400	commit: Actualizar index.js/package.json
+8297693eb13b203e67710886a8c804526e1284a9 d31829c80327d8e9b6733806c0046ea3cbab8f1b unknown <bisonociudadjuanbosh@cbisono.com> 1749394702 -0400	commit: Actualizar index.js/package.json
+d31829c80327d8e9b6733806c0046ea3cbab8f1b 32c3bc83eac327fb47a58f2ba117c8b28ea3624a unknown <bisonociudadjuanbosh@cbisono.com> 1749395388 -0400	commit: Actualizar index.js/package.json
+32c3bc83eac327fb47a58f2ba117c8b28ea3624a 123e9a3d4c523a91f7e5f3e4694a7d9509872710 unknown <bisonociudadjuanbosh@cbisono.com> 1749395620 -0400	commit: Actualizar index.js/package.json
+123e9a3d4c523a91f7e5f3e4694a7d9509872710 dc2a165c74e8ff7cf17201c2c4fa07440f8b8476 unknown <bisonociudadjuanbosh@cbisono.com> 1749407723 -0400	commit: Panel Administración Bisono-versión inicial
+dc2a165c74e8ff7cf17201c2c4fa07440f8b8476 6674ea1bbff5217a8ce36aa1fb8421381850ccf2 unknown <bisonociudadjuanbosh@cbisono.com> 1749410695 -0400	commit: Nueva actualizacion dos interfax
+6674ea1bbff5217a8ce36aa1fb8421381850ccf2 a7fd31e219122e8a9e07973cf6af19ace8542afa unknown <bisonociudadjuanbosh@cbisono.com> 1749411355 -0400	commit: Nueva actualizacion dos interfax
+a7fd31e219122e8a9e07973cf6af19ace8542afa 3b014db6c606a6eec17b87d4b9b0dc3bebe42c22 unknown <bisonociudadjuanbosh@cbisono.com> 1749411641 -0400	commit: Nueva actualizacion dos interfax
+3b014db6c606a6eec17b87d4b9b0dc3bebe42c22 648ecd84481ed1ac64c749db1940a8f1c383a058 unknown <bisonociudadjuanbosh@cbisono.com> 1749414842 -0400	commit: Agregar carpeta frontend como normal
+648ecd84481ed1ac64c749db1940a8f1c383a058 5ff5e3c6dd939fdfe610393cce03459e3a0cf182 unknown <bisonociudadjuanbosh@cbisono.com> 1749414913 -0400	commit: cambios
+5ff5e3c6dd939fdfe610393cce03459e3a0cf182 8267f3ae54d131d2cc473a055d7e76201039ef89 unknown <bisonociudadjuanbosh@cbisono.com> 1749416882 -0400	commit: separacion clon
+8267f3ae54d131d2cc473a055d7e76201039ef89 815abd2fc9766cca4a904b883b5f1164df78dcf7 unknown <bisonociudadjuanbosh@cbisono.com> 1749418590 -0400	commit: actualizar 3.0
+815abd2fc9766cca4a904b883b5f1164df78dcf7 3835c113fa809866c3185e034e2aa9fb360e0c54 unknown <bisonociudadjuanbosh@cbisono.com> 1749420298 -0400	commit: actualizar 5.0
+3835c113fa809866c3185e034e2aa9fb360e0c54 7a0422935a06ef862380c34d95139895e630f440 unknown <bisonociudadjuanbosh@cbisono.com> 1749420922 -0400	commit: actualizar 6.0
+7a0422935a06ef862380c34d95139895e630f440 2d7d3ccc364710f5d71abf3d9e31855d49ae0089 unknown <bisonociudadjuanbosh@cbisono.com> 1749421571 -0400	commit: actualizar
+2d7d3ccc364710f5d71abf3d9e31855d49ae0089 972cad7956680dd7a1aebb24f952e43d2969e30a unknown <bisonociudadjuanbosh@cbisono.com> 1749422028 -0400	commit: actualizar admin.html
+972cad7956680dd7a1aebb24f952e43d2969e30a d74ed3592893a620ddc5529ec9eaa7d256d3d24b unknown <bisonociudadjuanbosh@cbisono.com> 1749424031 -0400	commit: actualizacion
+d74ed3592893a620ddc5529ec9eaa7d256d3d24b 836e96eb48cbed73ed0d4716acd650570baffbb8 unknown <bisonociudadjuanbosh@cbisono.com> 1749424708 -0400	commit: actualizar
+836e96eb48cbed73ed0d4716acd650570baffbb8 8ff28a809c66e5331b26701aeab469c035ab4515 unknown <bisonociudadjuanbosh@cbisono.com> 1749427409 -0400	commit: actualizar
+8ff28a809c66e5331b26701aeab469c035ab4515 263dcb91c4dd3f17ef38da7db4f14d94e3a3551c unknown <bisonociudadjuanbosh@cbisono.com> 1749428470 -0400	commit: actualizar
+263dcb91c4dd3f17ef38da7db4f14d94e3a3551c 2848bddbcfd9c42d4ee0b8b003fad0372bec0789 unknown <bisonociudadjuanbosh@cbisono.com> 1749428826 -0400	commit: actualizar
+2848bddbcfd9c42d4ee0b8b003fad0372bec0789 509eae7667ed97e1fd1763a666555fa5a8ce0755 unknown <bisonociudadjuanbosh@cbisono.com> 1749429975 -0400	commit: actualizar
+509eae7667ed97e1fd1763a666555fa5a8ce0755 6404ca059808cb2570a96160107be06eabd5baa4 unknown <bisonociudadjuanbosh@cbisono.com> 1749430749 -0400	commit: act
+6404ca059808cb2570a96160107be06eabd5baa4 68c15bb85b6db1060c198406bb55cb94a1e1ae06 unknown <bisonociudadjuanbosh@cbisono.com> 1749431049 -0400	commit: ad
