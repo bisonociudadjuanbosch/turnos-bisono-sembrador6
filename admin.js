@@ -1,161 +1,108 @@
-// admin.js - Panel administrativo con reinicio y filtros avanzados
-const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com";
-let todosLosTurnos = [];
-
-window.addEventListener("DOMContentLoaded", async () => {
-  await cargarTurnos();
-
-  document.getElementById("reiniciar-conteo").addEventListener("click", async () => {
-    if (confirm("¿Estás seguro de reiniciar el conteo diario?")) {
-      const res = await fetch(`${backendURL}/reiniciar-turnos`, { method: "POST" });
-      const data = await res.json();
-      alert(data.mensaje || data.error);
-      location.reload();
-    }
-  });
-
-  document.getElementById("btn-filtrar").addEventListener("click", () => aplicarFiltros());
+// admin.js
+btnFiltrar.addEventListener("click", () => {
+  const filtros = {
+    nombre: filtroNombre.value.trim(),
+    telefono: filtroTelefono.value.trim(),
+    fecha: filtroFecha.value.trim(),
+    etapa: filtroEtapa.value,
+  };
+  cargarTurnos(filtros);
 });
 
-async function cargarTurnos() {
-  const tabla = document.querySelector("#tabla-turnos tbody");
-  tabla.innerHTML = "";
-  const res = await fetch(`${backendURL}/turnos`);
-  const data = await res.json();
-  todosLosTurnos = data.resultados || [];
-
-  for (let turno of todosLosTurnos) {
-    const fila = document.createElement("tr");
-    fila.dataset.numero = turno.numero;
-    fila.dataset.nombre = turno.nombre;
-    fila.dataset.telefono = turno.telefono;
-    fila.dataset.etapa = turno.etapa;
-    fila.dataset.fecha = turno.createdAt;
-
-    fila.innerHTML = `
-      <td>${turno.numero}</td>
-      <td>${turno.nombre}</td>
-      <td>${turno.telefono}</td>
-      <td>${turno.etapa}</td>
-      <td>
-        <select class="nuevo-estado">
-          <option${turno.etapa === "Pendiente" ? " selected" : ""}>Pendiente</option>
-          <option${turno.etapa === "Visitando apartamento modelo" ? " selected" : ""}>Visitando apartamento modelo</option>
-          <option${turno.etapa === "Precalificando con el banco" ? " selected" : ""}>Precalificando con el banco</option>
-          <option${turno.etapa === "En Proceso" ? " selected" : ""}>En Proceso</option>
-          <option${turno.etapa === "Finalizado" ? " selected" : ""}>Finalizado</option>
-          <option${turno.etapa === "OK" ? " selected" : ""}>OK</option>
-        </select>
-      </td>
-      <td>
-        <button class="btn-estado">Actualizar</button>
-        <button class="btn-whatsapp">WhatsApp</button>
-      </td>
-      <td class="resultado"></td>
-    `;
-    tabla.appendChild(fila);
-  }
-}
-
-document.addEventListener("click", async (e) => {
-  const fila = e.target.closest("tr");
-  if (!fila) return;
-
-  if (e.target.classList.contains("btn-estado")) {
-    const numero = fila.dataset.numero;
-    const nuevoEstado = fila.querySelector(".nuevo-estado").value;
-    const resultado = fila.querySelector(".resultado");
-
-    resultado.textContent = "⏳ Actualizando...";
-    const res = await fetch(`${backendURL}/cambiar-etapa`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ numero, nuevaEtapa: nuevoEstado })
-    });
+async function cargarTurnos(filtros = {}) {
+  try {
+    const res = await fetch(`${API_URL}/turnos`);
+    if (!res.ok) throw new Error("Error al cargar los turnos");
     const data = await res.json();
-    resultado.textContent = res.ok ? "✅ Actualizado" : `❌ ${data.error}`;
-  }
+    let turnos = data.resultados;
 
-  if (e.target.classList.contains("btn-whatsapp")) {
-    const numero = fila.dataset.numero;
-    const nombre = fila.dataset.nombre;
-    const telefono = fila.dataset.telefono;
-    const resultado = fila.querySelector(".resultado");
-
-    resultado.textContent = "⏳ Enviando...";
-
-    try {
-      const linkImagen = `${backendURL}/turnos/turno_${numero}.jpg`;
-
-      const res = await fetch(`${backendURL}/enviar-whatsapp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          numeroTelefono: telefono,
-          plantillaId: "b7648d2e-cc8b-428d-8552-d3374061df33",
-          nombreCliente: nombre,
-          imagenUrl: linkImagen
-        })
-      });
-
-      const data = await res.json();
-      resultado.textContent = res.ok ? "✅ WhatsApp enviado" : `❌ ${data.error}`;
-    } catch (err) {
-      console.error(err);
-      resultado.textContent = "❌ Error al enviar";
+    if (filtros.nombre) {
+      turnos = turnos.filter(t => t.nombre.toLowerCase().includes(filtros.nombre.toLowerCase()));
     }
-  }
-});
+    if (filtros.telefono) {
+      turnos = turnos.filter(t => t.telefono.includes(filtros.telefono));
+    }
+    if (filtros.fecha) {
+      turnos = turnos.filter(t => new Date(t.createdAt).toISOString().slice(0, 10) === filtros.fecha);
+    }
+    if (filtros.etapa) {
+      turnos = turnos.filter(t => t.etapa === filtros.etapa);
+    }
 
-function aplicarFiltros() {
-  const nombre = document.getElementById("filtro-nombre").value.toLowerCase();
-  const telefono = document.getElementById("filtro-telefono").value;
-  const etapa = document.getElementById("filtro-etapa").value;
-  const fecha = document.getElementById("filtro-fecha").value;
+    tablaCuerpo.innerHTML = "";
+    conteoTotal.textContent = `Total de turnos: ${turnos.length}`;
 
-  const filtrados = todosLosTurnos.filter(turno => {
-    const coincideNombre = turno.nombre.toLowerCase().includes(nombre);
-    const coincideTelefono = turno.telefono.includes(telefono);
-    const coincideEtapa = etapa ? turno.etapa === etapa : true;
-    const coincideFecha = fecha ? turno.createdAt?.slice(0, 10) === fecha : true;
-    return coincideNombre && coincideTelefono && coincideEtapa && coincideFecha;
-  });
+    if (turnos.length === 0) {
+      tablaCuerpo.innerHTML = `<tr><td colspan="8">No hay turnos que coincidan con los filtros.</td></tr>`;
+      return;
+    }
 
-  mostrarTurnosFiltrados(filtrados);
-}
+    turnos.forEach(turno => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${turno.numero}</td>
+        <td>${turno.nombre}</td>
+        <td>${turno.telefono}</td>
+        <td>${new Date(turno.createdAt).toLocaleString()}</td>
+        <td>${turno.etapa}</td>
+        <td>
+          <select data-numero="${turno.numero}" class="select-etapa">
+            <option value="">-- Cambiar etapa --</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Visitando apartamento modelo">Visitando apartamento modelo</option>
+            <option value="Precalificando con el banco">Precalificando con el banco</option>
+            <option value="En Proceso">En Proceso</option>
+            <option value="Finalizado">Finalizado</option>
+            <option value="OK">OK</option>
+          </select>
+        </td>
+        <td>
+          <button data-numero="${turno.numero}" class="btn-whatsapp">Actualizar WhatsApp</button>
+        </td>
+        <td class="resultado"></td>
+      `;
+      tablaCuerpo.appendChild(tr);
+    });
 
-function mostrarTurnosFiltrados(turnos) {
-  const tabla = document.querySelector("#tabla-turnos tbody");
-  tabla.innerHTML = "";
-  for (let turno of turnos) {
-    const fila = document.createElement("tr");
-    fila.dataset.numero = turno.numero;
-    fila.dataset.nombre = turno.nombre;
-    fila.dataset.telefono = turno.telefono;
-    fila.dataset.etapa = turno.etapa;
-    fila.dataset.fecha = turno.createdAt;
+    document.querySelectorAll(".btn-whatsapp").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const numero = btn.dataset.numero;
+        const telefono = turnos.find(t => t.numero === numero).telefono;
+        const mensaje = encodeURIComponent("¡Hola! es tu turno por favor acercate a nuestro Oficial de Venta Bisono.");
+        const url = `https://wa.me/${telefono}?text=${mensaje}`;
+        window.open(url, "_blank");
+      });
+    });
 
-    fila.innerHTML = `
-      <td>${turno.numero}</td>
-      <td>${turno.nombre}</td>
-      <td>${turno.telefono}</td>
-      <td>${turno.etapa}</td>
-      <td>
-        <select class="nuevo-estado">
-          <option${turno.etapa === "Pendiente" ? " selected" : ""}>Pendiente</option>
-          <option${turno.etapa === "Visitando apartamento modelo" ? " selected" : ""}>Visitando apartamento modelo</option>
-          <option${turno.etapa === "Precalificando con el banco" ? " selected" : ""}>Precalificando con el banco</option>
-          <option${turno.etapa === "En Proceso" ? " selected" : ""}>En Proceso</option>
-          <option${turno.etapa === "Finalizado" ? " selected" : ""}>Finalizado</option>
-          <option${turno.etapa === "OK" ? " selected" : ""}>OK</option>
-        </select>
-      </td>
-      <td>
-        <button class="btn-estado">Actualizar</button>
-        <button class="btn-whatsapp">WhatsApp</button>
-      </td>
-      <td class="resultado"></td>
-    `;
-    tabla.appendChild(fila);
+    document.querySelectorAll(".select-etapa").forEach(select => {
+      select.addEventListener("change", async () => {
+        const numero = select.dataset.numero;
+        const nuevaEtapa = select.value;
+        const resultadoCelda = select.closest("tr").querySelector(".resultado");
+
+        if (!nuevaEtapa) {
+          resultadoCelda.textContent = "Seleccione una etapa válida.";
+          resultadoCelda.className = "error";
+          return;
+        }
+
+        try {
+          const res = await fetch(`${API_URL}/cambiar-etapa`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ numero, nuevaEtapa })
+          });
+          if (!res.ok) throw new Error("Error al actualizar la etapa");
+          resultadoCelda.textContent = "Etapa actualizada con éxito";
+          resultadoCelda.className = "success";
+          cargarTurnos(getFiltrosActuales());
+        } catch (error) {
+          resultadoCelda.textContent = "Error actualizando etapa";
+          resultadoCelda.className = "error";
+        }
+      });
+    });
+  } catch (error) {
+    tablaCuerpo.innerHTML = `<tr><td colspan="8">Error cargando los turnos.</td></tr>`;
   }
 }

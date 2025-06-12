@@ -1,67 +1,108 @@
-// admin.js - Panel administrativo
-const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com";
-
-window.addEventListener("DOMContentLoaded", async () => {
-  const tabla = document.querySelector("#tabla-turnos tbody");
-  const res = await fetch(`${backendURL}/turnos`);
-  const turnos = await res.json();
-
-  for (let turno of turnos) {
-    const fila = document.createElement("tr");
-    fila.innerHTML = `
-      <td>${turno.numero}</td>
-      <td>${turno.nombre}</td>
-      <td>${turno.telefono}</td>
-      <td>${turno.etapa}</td>
-      <td>
-        <select class="nuevo-estado">
-          <option>Pendiente</option>
-          <option>En Proceso</option>
-          <option>Asistido</option>
-          <option>Finalizado</option>
-        </select>
-      </td>
-      <td>
-        <button class="btn-estado">Actualizar</button>
-        <button class="btn-whatsapp">WhatsApp</button>
-      </td>
-      <td class="resultado"></td>
-    `;
-    tabla.appendChild(fila);
-  }
+// admin.js
+btnFiltrar.addEventListener("click", () => {
+  const filtros = {
+    nombre: filtroNombre.value.trim(),
+    telefono: filtroTelefono.value.trim(),
+    fecha: filtroFecha.value.trim(),
+    etapa: filtroEtapa.value,
+  };
+  cargarTurnos(filtros);
 });
 
-document.addEventListener("click", async (e) => {
-  if (e.target.classList.contains("btn-estado")) {
-    const fila = e.target.closest("tr");
-    const numero = fila.cells[0].textContent;
-    const nuevoEstado = fila.querySelector(".nuevo-estado").value;
-    const resultado = fila.querySelector(".resultado");
-
-    resultado.textContent = "⏳...";
-    const res = await fetch(`${backendURL}/cambiar-etapa`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ numero, nuevaEtapa: nuevoEstado })
-    });
+async function cargarTurnos(filtros = {}) {
+  try {
+    const res = await fetch(`${API_URL}/turnos`);
+    if (!res.ok) throw new Error("Error al cargar los turnos");
     const data = await res.json();
-    resultado.textContent = res.ok ? "✅ Actualizado" : `❌ ${data.error}`;
-  }
+    let turnos = data.resultados;
 
-  if (e.target.classList.contains("btn-whatsapp")) {
-    const fila = e.target.closest("tr");
-    const telefono = fila.cells[2].textContent;
-    const resultado = fila.querySelector(".resultado");
-    resultado.textContent = "⏳ Enviando...";
+    if (filtros.nombre) {
+      turnos = turnos.filter(t => t.nombre.toLowerCase().includes(filtros.nombre.toLowerCase()));
+    }
+    if (filtros.telefono) {
+      turnos = turnos.filter(t => t.telefono.includes(filtros.telefono));
+    }
+    if (filtros.fecha) {
+      turnos = turnos.filter(t => new Date(t.createdAt).toISOString().slice(0, 10) === filtros.fecha);
+    }
+    if (filtros.etapa) {
+      turnos = turnos.filter(t => t.etapa === filtros.etapa);
+    }
 
-    const mensaje = "¡Hola! Es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó. Gracias por preferirnos.";
-    const res = await fetch(`${backendURL}/enviar-turno`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ telefono, mensaje })
+    tablaCuerpo.innerHTML = "";
+    conteoTotal.textContent = `Total de turnos: ${turnos.length}`;
+
+    if (turnos.length === 0) {
+      tablaCuerpo.innerHTML = `<tr><td colspan="8">No hay turnos que coincidan con los filtros.</td></tr>`;
+      return;
+    }
+
+    turnos.forEach(turno => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${turno.numero}</td>
+        <td>${turno.nombre}</td>
+        <td>${turno.telefono}</td>
+        <td>${new Date(turno.createdAt).toLocaleString()}</td>
+        <td>${turno.etapa}</td>
+        <td>
+          <select data-numero="${turno.numero}" class="select-etapa">
+            <option value="">-- Cambiar etapa --</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Visitando apartamento modelo">Visitando apartamento modelo</option>
+            <option value="Precalificando con el banco">Precalificando con el banco</option>
+            <option value="En Proceso">En Proceso</option>
+            <option value="Finalizado">Finalizado</option>
+            <option value="OK">OK</option>
+          </select>
+        </td>
+        <td>
+          <button data-numero="${turno.numero}" class="btn-whatsapp">Actualizar WhatsApp</button>
+        </td>
+        <td class="resultado"></td>
+      `;
+      tablaCuerpo.appendChild(tr);
     });
 
-    const data = await res.json();
-    resultado.textContent = res.ok ? "✅ WhatsApp enviado" : `❌ ${data.error}`;
+    document.querySelectorAll(".btn-whatsapp").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const numero = btn.dataset.numero;
+        const telefono = turnos.find(t => t.numero === numero).telefono;
+        const mensaje = encodeURIComponent("¡Hola! es tu turno por favor acercate a nuestro Oficial de Venta Bisono.");
+        const url = `https://wa.me/${telefono}?text=${mensaje}`;
+        window.open(url, "_blank");
+      });
+    });
+
+    document.querySelectorAll(".select-etapa").forEach(select => {
+      select.addEventListener("change", async () => {
+        const numero = select.dataset.numero;
+        const nuevaEtapa = select.value;
+        const resultadoCelda = select.closest("tr").querySelector(".resultado");
+
+        if (!nuevaEtapa) {
+          resultadoCelda.textContent = "Seleccione una etapa válida.";
+          resultadoCelda.className = "error";
+          return;
+        }
+
+        try {
+          const res = await fetch(`${API_URL}/cambiar-etapa`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ numero, nuevaEtapa })
+          });
+          if (!res.ok) throw new Error("Error al actualizar la etapa");
+          resultadoCelda.textContent = "Etapa actualizada con éxito";
+          resultadoCelda.className = "success";
+          cargarTurnos(getFiltrosActuales());
+        } catch (error) {
+          resultadoCelda.textContent = "Error actualizando etapa";
+          resultadoCelda.className = "error";
+        }
+      });
+    });
+  } catch (error) {
+    tablaCuerpo.innerHTML = `<tr><td colspan="8">Error cargando los turnos.</td></tr>`;
   }
-});
+}

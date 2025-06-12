@@ -1,4 +1,3 @@
-// index.js - Actualizado con flujo de opt-in y envío de imagen por plantilla
 const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com";
 let turnoActual = 0;
 
@@ -51,15 +50,7 @@ async function compartirWhatsApp() {
     return;
   }
 
-  // Paso 1: Redirigir al opt-in de Gupshup
-  const optinURL = "https://www.gupshup.io/whatsapp/optin?bId=957b8460-920b-4f6e-89a6-ce93c9b58890";
-  window.open(optinURL, "_blank");
-
-  // Paso 2: Continuar después de confirmación
-  const confirmar = confirm("¿Ya diste opt-in en WhatsApp? Si ya iniciaste conversación con Bisonó, haz clic en Aceptar para enviar el ticket.");
-  if (!confirmar) return;
-
-  // Paso 3: Generar imagen y subir
+  // Generar imagen y subir
   const canvas = await html2canvas(ticket, { backgroundColor: "#fff", scale: 2 });
   const base64 = canvas.toDataURL("image/jpeg", 1.0);
   const nombreArchivo = `turno_${Date.now()}.jpg`;
@@ -72,7 +63,7 @@ async function compartirWhatsApp() {
 
   const { url } = await subida.json();
 
-  // Paso 4: Enviar imagen por plantilla
+  // Enviar imagen por plantilla
   const envio = await fetch(`${backendURL}/enviar-whatsapp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
