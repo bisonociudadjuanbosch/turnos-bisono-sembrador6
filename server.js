@@ -99,7 +99,7 @@ app.post("/reiniciar-turnos", async (req, res) => {
     res.status(500).json({ error: "Error al reiniciar los turnos." });
   }
 });
-
+app.get("/health", (req, res) => res.status(200).send("OK"));
 app.listen(PORT, () =>
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`)
 );
