@@ -9,7 +9,8 @@ const mongoose = require("mongoose");
 const Turno = require("./models/Turno");
 
 const app = express();
-const PORT = parseInt(process.env.PORT) || 3000;
+const port = process.env.PORT || 10000;
+const host = '0.0.0.0';
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const IMG_DIR = path.join(PUBLIC_DIR, "turnos");
@@ -24,8 +25,8 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB conectado"))
   .catch(err => console.error("❌ Error de conexión a MongoDB:", err));
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+app.get('/', (req, res) => {
+  res.send('✅ Service is live!');
 });
 
 app.get("/turnos", async (req, res) => {
@@ -100,8 +101,7 @@ app.post("/reiniciar-turnos", async (req, res) => {
   }
 });
 app.get("/health", (req, res) => res.status(200).send("OK"));
-const port = process.env.PORT || 10000;
-const host = process.env.HOST || '0.0.0.0';
+
 app.listen(port, host, () => {
   console.log(`Servidor corriendo en http://${host}:${port}`);
 });
