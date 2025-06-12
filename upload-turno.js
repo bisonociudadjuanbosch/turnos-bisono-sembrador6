@@ -69,21 +69,34 @@ app.post("/cambiar-etapa", async (req, res) => {
 });
 
 /**
- * Función para enviar mensaje de WhatsApp usando Gupshup API
+ * Enviar mensaje de WhatsApp (con imagen opcional)
  */
-async function enviarWhatsApp(telefono) {
+async function enviarWhatsApp(telefono, imageUrl = null) {
   const token = process.env.GUPSHUP_API_KEY;
   const from = process.env.GUPSHUP_SOURCE_NUMBER || "18096690177";
   const appName = process.env.GUPSHUP_APP_NAME || "ConstructoraBisono";
+
+  let messagePayload;
+
+  if (imageUrl) {
+    messagePayload = {
+      type: "image",
+      originalUrl: imageUrl,
+      previewUrl: imageUrl,
+      caption: "Aquí tienes tu turno en Constructora Bisonó"
+    };
+  } else {
+    messagePayload = {
+      type: "text",
+      text: "¡Hola! Es tu turno. Acércate a nuestro Oficial de Ventas Bisonó."
+    };
+  }
 
   const payload = new URLSearchParams();
   payload.append("channel", "whatsapp");
   payload.append("source", from);
   payload.append("destination", telefono);
-  payload.append("message", JSON.stringify({
-    type: "text",
-    text: "¡Hola! Es tu turno. Acércate a nuestro Oficial de Ventas Bisonó."
-  }));
+  payload.append("message", JSON.stringify(messagePayload));
   payload.append("src.name", appName);
 
   await axios.post("https://api.gupshup.io/sm/api/v1/msg", payload, {
@@ -95,7 +108,7 @@ async function enviarWhatsApp(telefono) {
 }
 
 /**
- * POST /subir-imagen - Guarda una imagen en base64 y devuelve la URL pública
+ * POST /subir-imagen - Guarda imagen base64 y devuelve URL
  */
 app.post("/subir-imagen", (req, res) => {
   const { imagen } = req.body;
@@ -121,11 +134,43 @@ app.post("/subir-imagen", (req, res) => {
 });
 
 /**
- * Servir imágenes desde la carpeta /turnos
+ * POST /enviar-turno - Subir imagen base64 y enviar por WhatsApp
+ */
+app.post("/enviar-turno", (req, res) => {
+  const { telefono, imagen } = req.body;
+
+  if (!telefono || !imagen || !imagen.startsWith("data:image/")) {
+    return res.status(400).json({ error: "Faltan datos válidos: teléfono o imagen" });
+  }
+
+  const extension = imagen.substring("data:image/".length, imagen.indexOf(";base64"));
+  const base64Data = imagen.split(";base64,").pop();
+  const filename = `turno_${Date.now()}.${extension}`;
+  const filePath = path.join(TURNOS_FOLDER, filename);
+
+  fs.writeFile(filePath, base64Data, "base64", async err => {
+    if (err) {
+      console.error("❌ Error al guardar imagen:", err);
+      return res.status(500).json({ error: "No se pudo guardar la imagen" });
+    }
+
+    const url = `${req.protocol}://${req.get("host")}/turnos/${filename}`;
+    try {
+      await enviarWhatsApp(telefono, url);
+      res.json({ success: true, url });
+    } catch (e) {
+      console.error("❌ Error al enviar WhatsApp:", e.response?.data || e.message);
+      res.status(500).json({ error: "No se pudo enviar WhatsApp" });
+    }
+  });
+});
+
+/**
+ * Servir imágenes desde /turnos
  */
 app.use("/turnos", express.static(TURNOS_FOLDER));
 
-// Iniciar el servidor
+// Iniciar servidor
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`)

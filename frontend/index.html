@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <style>
-    /* Estilos existentes */
     body { font-family: Arial, sans-serif; text-align: center; margin: 20px; background-color: #f9f9f9; }
     .ticket { background: white; padding: 20px; border-radius: 12px; max-width: 400px; margin: auto; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
     .turno-grande { font-size: 48px; font-weight: bold; margin: 20px 0; }
@@ -79,11 +78,11 @@
       document.getElementById("telefono-mostrado").innerText = "Tel: " + telefono;
       document.getElementById("en-espera").innerText = Math.max(0, turnoActual - 1);
 
-      // Enviar datos al backend
-      fetch(`${backendURL}/turnos`, {
+      // Guardar turno en servidor
+      fetch(`${backendURL}/agregar-turno`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numero, fechaHora, nombre, telefono, etapa: "Pendiente" })
+        body: JSON.stringify({ numero, telefono, etapa: "Pendiente" })
       })
       .then(res => res.json())
       .then(data => console.log("Turno registrado:", data))
@@ -105,67 +104,42 @@
     }
 
     async function compartirWhatsApp() {
-<<<<<<< HEAD
       const ticket = document.getElementById("ticket");
+      const nombre = document.getElementById("nombre").value.trim();
+      const telefono = document.getElementById("telefono").value.trim();
       const botones = document.querySelector(".botones");
+
+      if (!telefono || !nombre) {
+        alert("Por favor completa tu nombre y número de WhatsApp.");
+        return;
+      }
+
       botones.style.display = "none";
-      const canvas = await html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 });
-      const base64image = canvas.toDataURL("image/jpeg", 1.0);
-      botones.style.display = "block";
 
       try {
-        const res = await fetch(`${backendURL}/upload-turno`, {
+        const canvas = await html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 });
+        const base64image = canvas.toDataURL("image/jpeg", 1.0);
+        botones.style.display = "block";
+
+        const res = await fetch(`${backendURL}/enviar-turno`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: base64image })
+          body: JSON.stringify({ telefono, imagen: base64image })
         });
+
         const data = await res.json();
-        if (data.url) {
-          const nombre = document.getElementById("nombre").value.trim();
-          const mensaje = encodeURIComponent(`¡Hola ${nombre}! Aquí está tu turno de Constructora Bisonó: ${data.url}`);
-          window.open(`https://wa.me/?text=${mensaje}`, "_blank");
+
+        if (res.ok && data.success) {
+          alert("✅ Turno enviado por WhatsApp con éxito.");
         } else {
-          alert("No se pudo compartir la imagen.");
+          throw new Error(data.error || "No se pudo enviar el WhatsApp.");
         }
       } catch (err) {
-        console.error("Error compartiendo por WhatsApp:", err);
-        alert("Ocurrió un error al compartir.");
+        console.error("❌ Error al compartir por WhatsApp:", err);
+        alert("Error enviando por WhatsApp: " + err.message);
+        botones.style.display = "block";
       }
     }
-=======
-  const ticket = document.getElementById("ticket");
-  const botones = document.querySelector(".botones");
-  botones.style.display = "none";
-
-  try {
-    const canvas = await html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 });
-    const base64image = canvas.toDataURL("image/jpeg", 1.0);
-    botones.style.display = "block";
-
-    const res = await fetch(`${backendURL}/upload-turno`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: base64image })
-    });
-
-    const data = await res.json();
-
-    if (res.ok && data.url) {
-      const nombre = document.getElementById("nombre").value.trim();
-      const mensaje = encodeURIComponent(`¡Hola ${nombre}! Aquí está tu turno de Constructora Bisonó: ${data.url}`);
-      window.open(`https://wa.me/?text=${mensaje}`, "_blank");
-    } else {
-      throw new Error(data.error || "Error al subir la imagen");
-    }
-
-  } catch (err) {
-    console.error("Error compartiendo por WhatsApp:", err);
-    alert("Ocurrió un error: " + err.message);
-    botones.style.display = "block";
-  }
-}
-
->>>>>>> nombre-de-tu-rama
   </script>
 
 </body>

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Panel de Administración de Turnos</title>
   <style>
     body { font-family: sans-serif; padding: 2rem; }
@@ -103,6 +103,13 @@
           if (data.error) throw new Error(data.error);
           fila.children[1].textContent = nuevaEtapa;
           resultado.textContent = "✅ Estado actualizado";
+
+          // Enviar mensaje al siguiente turno en etapa "Pendiente"
+          const siguienteTurno = await obtenerSiguienteTurnoPendiente();
+          if (siguienteTurno) {
+            await enviarWhatsApp(siguienteTurno.telefono, siguienteTurno.numero);
+          }
+
         } catch (err) {
           resultado.textContent = "❌ " + err.message;
         }
@@ -122,7 +129,7 @@
         const mensaje = `¡Hola! Este es tu turno de Constructora Bisonó: ${turno}. Por favor acércate a nuestro oficial de ventas.`;
 
         try {
-          const res = await fetch("https://api.gupshup.io/wa/api/v1/msg", {
+          const res = await fetch("https://api.gupshup.io/sm/api/v1/msg", {
             method: "POST",
             headers: {
               "Content-Type": "application/x-www-form-urlencoded",
@@ -139,6 +146,49 @@
         }
       }
     });
+
+    async function obtenerSiguienteTurnoPendiente() {
+      try {
+        const res = await fetch(`${API}/turnos?pagina=1&limite=100`);
+        if (!res.ok) throw new Error(`Error HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data || typeof data !== "object" || !Array.isArray(data.resultados)) {
+          throw new Error("Respuesta inesperada del servidor");
+        }
+
+        const turnosPendientes = data.resultados.filter(turno => turno.etapa === "Pendiente");
+        if (turnosPendientes.length > 0) {
+          return turnosPendientes[0]; // Retorna el siguiente turno pendiente
+        } else {
+          return null;
+        }
+
+      } catch (error) {
+        console.error("Error al obtener siguiente turno pendiente:", error);
+        return null;
+      }
+    }
+
+    async function enviarWhatsApp(telefono, turno) {
+      const mensaje = `¡Hola! Es tu turno, por favor pasa con nuestro Oficial de Ventas Bisonó. Gracias por preferirnos.`;
+
+      try {
+        const res = await fetch("https://api.gupshup.io/sm/api/v1/msg", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "apikey": GUPSHUP_APIKEY
+          },
+          body: `channel=whatsapp&source=${GUPSHUP_SOURCE}&destination=${telefono}&message=${encodeURIComponent(JSON.stringify({ type: "text", text: mensaje }))}&src.name=${GUPSHUP_SRC_NAME}`
+        });
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message || "Error desconocido");
+        console.log("📤 WhatsApp enviado al siguiente turno:", turno);
+      } catch (err) {
+        console.error("❌ Error al enviar WhatsApp:", err.message);
+      }
+    }
 
     obtenerTurnos();
   </script>

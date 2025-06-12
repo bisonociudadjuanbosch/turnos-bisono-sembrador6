@@ -1,8 +1,8 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Panel de Administración de Turnos</title>
   <style>
     body { font-family: sans-serif; padding: 2rem; }
@@ -34,8 +34,10 @@
   </table>
 
   <script>
-HEAD
-    const API = location.origin;
+    const API = "https://turnos-bisono-sembrador6-v2n2.onrender.com"; // URL base de tu backend
+    const GUPSHUP_APIKEY = "mqlyqhzffbgosadyap1vz6qpt8qzltku";
+    const GUPSHUP_SOURCE = "18096690177";
+    const GUPSHUP_SRC_NAME = "ConstructoraBisono";
 
     async function obtenerTurnos() {
       const tabla = document.querySelector("#tabla-turnos tbody");
@@ -43,8 +45,12 @@ HEAD
 
       try {
         const res = await fetch(`${API}/turnos?pagina=1&limite=100`);
+        if (!res.ok) throw new Error(`Error HTTP ${res.status}`);
         const data = await res.json();
-        if (!Array.isArray(data.resultados)) throw new Error("Respuesta no válida del servidor");
+
+        if (!data || typeof data !== "object" || !Array.isArray(data.resultados)) {
+          throw new Error("Respuesta inesperada del servidor");
+        }
 
         if (data.resultados.length === 0) {
           tabla.innerHTML = "<tr><td colspan='7'>No hay turnos registrados.</td></tr>";
@@ -55,35 +61,35 @@ HEAD
         data.resultados.forEach(turno => {
           const fila = document.createElement("tr");
           fila.innerHTML = `
-            <td class="col-numero">${turno.numero}</td>
-            <td class="col-estado">${turno.etapa}</td>
+            <td>${turno.numero}</td>
+            <td>${turno.etapa || "Pendiente"}</td>
             <td>
               <select class="nuevo-estado">
                 <option value="Pendiente">Pendiente</option>
-                <option value="Visitando Apartamento Modelo">Visitando Apartamento Modelo</option>
+                <option value="Visitando Apartamentos Modelo">Visitando Apartamentos Modelo</option>
                 <option value="Precalificando con el Banco">Precalificando con el Banco</option>
-                <option value="En Proceso">En Proceso</option>
                 <option value="OK">OK</option>
+                <option value="En Proceso">En Proceso</option>
                 <option value="Finalizado">Finalizado</option>
               </select>
             </td>
-            <td><button class="cambiar-estado">✔️</button></td>
+            <td><button class="cambiar-estado">Cambiar</button></td>
             <td>${turno.telefono}</td>
-            <td><button class="enviar-wsp">📤</button></td>
+            <td><button class="enviar-wsp">Enviar</button></td>
             <td class="resultado"></td>
           `;
           tabla.appendChild(fila);
         });
 
       } catch (error) {
-        tabla.innerHTML = `<tr><td colspan='7'>Error al cargar turnos: ${error.message}</td></tr>`;
+        tabla.innerHTML = `<tr><td colspan='7'>❌ Error al cargar turnos: ${error.message}</td></tr>`;
       }
     }
 
-    document.addEventListener("click", async (e) => {
+    document.addEventListener("click", async e => {
       if (e.target.classList.contains("cambiar-estado")) {
         const fila = e.target.closest("tr");
-        const numero = fila.querySelector(".col-numero").textContent;
+        const numero = fila.children[0].textContent;
         const nuevaEtapa = fila.querySelector(".nuevo-estado").value;
         const resultado = fila.querySelector(".resultado");
 
@@ -93,166 +99,98 @@ HEAD
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ numero, nuevaEtapa })
           });
-
           const data = await res.json();
-          if (res.ok) {
-            fila.querySelector(".col-estado").textContent = nuevaEtapa;
-            resultado.textContent = "✅ Etapa actualizada";
-          } else {
-            resultado.textContent = "❌ " + (data.error || "Error al actualizar");
+          if (data.error) throw new Error(data.error);
+          fila.children[1].textContent = nuevaEtapa;
+          resultado.textContent = "✅ Estado actualizado";
+
+          // Enviar mensaje al siguiente turno en etapa "Pendiente"
+          const siguienteTurno = await obtenerSiguienteTurnoPendiente();
+          if (siguienteTurno) {
+            await enviarWhatsApp(siguienteTurno.telefono, siguienteTurno.numero);
           }
+
         } catch (err) {
-          resultado.textContent = "❌ Error de red";
+          resultado.textContent = "❌ " + err.message;
         }
       }
 
       if (e.target.classList.contains("enviar-wsp")) {
         const fila = e.target.closest("tr");
         const telefono = fila.children[4].textContent;
+        const turno = fila.children[0].textContent;
         const resultado = fila.querySelector(".resultado");
 
+        if (!telefono || !/^\d{10,15}$/.test(telefono)) {
+          resultado.textContent = "❌ Teléfono inválido";
+          return;
+        }
+
+        const mensaje = `¡Hola! Este es tu turno de Constructora Bisonó: ${turno}. Por favor acércate a nuestro oficial de ventas.`;
+
         try {
-          const res = await fetch("https://graph.facebook.com/v19.0/508852171945366/messages", {
+          const res = await fetch("https://api.gupshup.io/sm/api/v1/msg", {
             method: "POST",
             headers: {
-              "Authorization": "Bearer sk_33ed3140aca24e4c98cd75b52b5c7722", // ← tu token real aquí
-              "Content-Type": "application/json"
+              "Content-Type": "application/x-www-form-urlencoded",
+              "apikey": GUPSHUP_APIKEY
             },
-            body: JSON.stringify({
-              messaging_product: "whatsapp",
-              to: telefono,
-              type: "text",
-              text: { body: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó." }
-            })
+            body: `channel=whatsapp&source=${GUPSHUP_SOURCE}&destination=${telefono}&message=${encodeURIComponent(JSON.stringify({ type: "text", text: mensaje }))}&src.name=${GUPSHUP_SRC_NAME}`
           });
 
           const data = await res.json();
-          if (res.ok && !data.error) {
-            resultado.textContent = "📤 WhatsApp enviado";
-          } else {
-            throw new Error(data.error?.message || "Error al enviar mensaje");
-          }
+          if (data.error) throw new Error(data.error.message || "Error desconocido");
+          resultado.textContent = "📤 WhatsApp enviado";
         } catch (err) {
           resultado.textContent = "❌ " + err.message;
         }
       }
     });
 
-    obtenerTurnos();
-  </script>
-=======
-  const API = location.origin;
-
-  async function obtenerTurnos() {
-    const tabla = document.querySelector("#tabla-turnos tbody");
-    tabla.innerHTML = "<tr><td colspan='7'>Cargando turnos...</td></tr>";
-
-    try {
-      const res = await fetch(`${API}/turnos?pagina=1&limite=100`);
-      const data = await res.json();
-      if (!Array.isArray(data.resultados)) throw new Error("Respuesta no válida del servidor");
-
-      if (data.resultados.length === 0) {
-        tabla.innerHTML = "<tr><td colspan='7'>No hay turnos registrados.</td></tr>";
-        return;
-      }
-
-      tabla.innerHTML = "";
-      data.resultados.forEach(turno => {
-        const fila = document.createElement("tr");
-        fila.innerHTML = `
-          <td class="col-numero">${turno.numero}</td>
-          <td class="col-estado">${turno.etapa}</td>
-          <td>
-            <select class="nuevo-estado">
-              <option value="Pendiente">Pendiente</option>
-              <option value="Visitando Apartamento Modelo">Visitando Apartamento Modelo</option>
-              <option value="Precalificando con el Banco">Precalificando con el Banco</option>
-              <option value="En Proceso">En Proceso</option>
-              <option value="OK">OK</option>
-              <option value="Finalizado">Finalizado</option>
-            </select>
-          </td>
-          <td><button class="cambiar-estado">✔️</button></td>
-          <td>${turno.telefono}</td>
-          <td><button class="enviar-wsp">📤</button></td>
-          <td class="resultado"></td>
-        `;
-        tabla.appendChild(fila);
-      });
-
-    } catch (error) {
-      tabla.innerHTML = `<tr><td colspan='7'>Error al cargar turnos: ${error.message}</td></tr>`;
-    }
-  }
-
-  document.addEventListener("click", async (e) => {
-    if (e.target.classList.contains("cambiar-estado")) {
-      const fila = e.target.closest("tr");
-      const numero = fila.querySelector(".col-numero").textContent;
-      const nuevaEtapa = fila.querySelector(".nuevo-estado").value;
-      const resultado = fila.querySelector(".resultado");
-
+    async function obtenerSiguienteTurnoPendiente() {
       try {
-        const res = await fetch(`${API}/cambiar-etapa`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ numero, nuevaEtapa })
-        });
-
+        const res = await fetch(`${API}/turnos?pagina=1&limite=100`);
+        if (!res.ok) throw new Error(`Error HTTP ${res.status}`);
         const data = await res.json();
-        if (res.ok) {
-          fila.querySelector(".col-estado").textContent = nuevaEtapa;
-          resultado.textContent = "✅ Etapa actualizada";
-        } else {
-          resultado.textContent = "❌ " + (data.error || "Error al actualizar");
+        if (!data || typeof data !== "object" || !Array.isArray(data.resultados)) {
+          throw new Error("Respuesta inesperada del servidor");
         }
-      } catch (err) {
-        resultado.textContent = "❌ Error de red";
+
+        const turnosPendientes = data.resultados.filter(turno => turno.etapa === "Pendiente");
+        if (turnosPendientes.length > 0) {
+          return turnosPendientes[0]; // Retorna el siguiente turno pendiente
+        } else {
+          return null;
+        }
+
+      } catch (error) {
+        console.error("Error al obtener siguiente turno pendiente:", error);
+        return null;
       }
     }
 
-    if (e.target.classList.contains("enviar-wsp")) {
-      const fila = e.target.closest("tr");
-      const telefono = fila.children[4].textContent.trim();
-      const resultado = fila.querySelector(".resultado");
-
-      // Evitar enviar si no hay número válido
-      if (!telefono || telefono.length < 8) {
-        resultado.textContent = "❌ Número WhatsApp inválido";
-        return;
-      }
+    async function enviarWhatsApp(telefono, turno) {
+      const mensaje = `¡Hola! Es tu turno, por favor pasa con nuestro Oficial de Ventas Bisonó. Gracias por preferirnos.`;
 
       try {
-        const res = await fetch("https://graph.facebook.com/v19.0/508852171945366/messages", {
+        const res = await fetch("https://api.gupshup.io/sm/api/v1/msg", {
           method: "POST",
           headers: {
-            "Authorization": "Bearer sk_33ed3140aca24e4c98cd75b52b5c7722", // token real
-            "Content-Type": "application/json"
+            "Content-Type": "application/x-www-form-urlencoded",
+            "apikey": GUPSHUP_APIKEY
           },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: telefono,
-            type: "text",
-            text: { body: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó." }
-          })
+          body: `channel=whatsapp&source=${GUPSHUP_SOURCE}&destination=${telefono}&message=${encodeURIComponent(JSON.stringify({ type: "text", text: mensaje }))}&src.name=${GUPSHUP_SRC_NAME}`
         });
 
         const data = await res.json();
-        if (res.ok && !data.error) {
-          resultado.textContent = "📤 WhatsApp enviado";
-        } else {
-          resultado.textContent = "❌ " + (data.error?.message || "Error al enviar mensaje");
-        }
+        if (data.error) throw new Error(data.error.message || "Error desconocido");
+        console.log("📤 WhatsApp enviado al siguiente turno:", turno);
       } catch (err) {
-        resultado.textContent = "❌ " + err.message;
+        console.error("❌ Error al enviar WhatsApp:", err.message);
       }
     }
-  });
 
-  obtenerTurnos();
-</script>
-
->>>>>>> nombre-de-tu-rama
+    obtenerTurnos();
+  </script>
 </body>
 </html>
