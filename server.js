@@ -1,4 +1,4 @@
-// server.js - Backend actualizado con MongoDB para Turnos Bisonó
+// server.js - Backend actualizado con MongoDB y reinicio de turnos
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -16,26 +16,22 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const CARPETA_IMAGENES = path.join(PUBLIC_DIR, "turnos");
 if (!fs.existsSync(CARPETA_IMAGENES)) fs.mkdirSync(CARPETA_IMAGENES, { recursive: true });
 
-// Middleware
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static(PUBLIC_DIR));
 app.use("/turnos", express.static(CARPETA_IMAGENES));
 
-// Conexión a MongoDB
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB conectado"))
   .catch(err => console.error("❌ Error de conexión a MongoDB:", err));
 
 app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 
-// ENDPOINT: Obtener todos los turnos
 app.get("/turnos", async (req, res) => {
   const resultados = await Turno.find().sort({ createdAt: -1 });
   res.json({ resultados });
 });
 
-// ENDPOINT: Agregar nuevo turno
 app.post("/agregar-turno", async (req, res) => {
   const { numero, telefono, nombre } = req.body;
   if (!numero || !telefono || !nombre) return res.status(400).json({ error: "Faltan datos" });
@@ -44,7 +40,6 @@ app.post("/agregar-turno", async (req, res) => {
   res.json(nuevoTurno);
 });
 
-// ENDPOINT: Cambiar estado del turno
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
   const turno = await Turno.findOneAndUpdate({ numero }, { etapa: nuevaEtapa }, { new: true });
@@ -52,7 +47,6 @@ app.post("/cambiar-etapa", async (req, res) => {
   res.json({ mensaje: "Etapa actualizada", turno });
 });
 
-// ENDPOINT: Subir imagen base64
 app.post("/subir-imagen", (req, res) => {
   const { base64, nombreArchivo } = req.body;
   if (!base64 || !nombreArchivo) return res.status(400).json({ error: "Faltan datos" });
@@ -64,7 +58,6 @@ app.post("/subir-imagen", (req, res) => {
   res.json({ url });
 });
 
-// ENDPOINT: Enviar mensaje WhatsApp (plantilla con imagen)
 app.post("/enviar-whatsapp", async (req, res) => {
   const { numeroTelefono, plantillaId, nombreCliente, imagenUrl } = req.body;
   if (!numeroTelefono || !plantillaId || !nombreCliente || !imagenUrl) {
@@ -78,14 +71,8 @@ app.post("/enviar-whatsapp", async (req, res) => {
         source: process.env.GUPSHUP_SOURCE,
         destination: numeroTelefono,
         "src.name": process.env.GUPSHUP_SRC_NAME,
-        template: JSON.stringify({
-          id: plantillaId,
-          params: [nombreCliente]
-        }),
-        message: JSON.stringify({
-          type: "image",
-          image: { link: imagenUrl }
-        })
+        template: JSON.stringify({ id: plantillaId, params: [nombreCliente] }),
+        message: JSON.stringify({ type: "image", image: { link: imagenUrl } })
       }),
       {
         headers: {
@@ -102,9 +89,15 @@ app.post("/enviar-whatsapp", async (req, res) => {
   }
 });
 
-// INICIAR SERVIDOR
-app.get("/", (req, res) =>
-  res.sendFile(path.join(__dirname, "public", "index.html"))
-);
+// NUEVO ENDPOINT: Reiniciar el conteo diario (eliminar todos los turnos)
+app.post("/reiniciar-turnos", async (req, res) => {
+  try {
+    await Turno.deleteMany({});
+    res.json({ mensaje: "Todos los turnos han sido eliminados para reiniciar el conteo diario." });
+  } catch (err) {
+    console.error("Error reiniciando turnos:", err.message);
+    res.status(500).json({ error: "Error al reiniciar los turnos." });
+  }
+});
 
 app.listen(PORT, () => console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`));

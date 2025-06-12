@@ -11,13 +11,32 @@
     th { background-color: #007bff; color: white; }
     .success { color: green; }
     .error { color: red; }
-    select, button { padding: 6px 10px; border-radius: 4px; }
+    select, button, input { padding: 6px 10px; border-radius: 4px; margin: 5px; }
     button { background-color: #007bff; color: white; border: none; cursor: pointer; }
     button:hover { background-color: #0056b3; }
+    #filtros { margin-bottom: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
   </style>
 </head>
 <body>
   <h1>Panel de Administración - Constructora Bisonó</h1>
+
+  <div id="filtros">
+    <input type="text" id="filtro-nombre" placeholder="Nombre">
+    <input type="text" id="filtro-telefono" placeholder="Teléfono">
+    <input type="date" id="filtro-fecha">
+    <select id="filtro-etapa">
+      <option value="">Todas las etapas</option>
+      <option>Pendiente</option>
+      <option>Visitando apartamento modelo</option>
+      <option>Precalificando con el banco</option>
+      <option>En Proceso</option>
+      <option>Finalizado</option>
+      <option>OK</option>
+    </select>
+    <button id="btn-filtrar">Generar Reporte</button>
+    <button id="reiniciar-conteo">Reiniciar conteo diario</button>
+  </div>
+
   <table id="tabla-turnos">
     <thead>
       <tr>
