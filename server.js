@@ -103,4 +103,5 @@ app.post("/enviar-whatsapp", async (req, res) => {
 });
 
 // INICIAR SERVIDOR
+app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 app.listen(PORT, () => console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`));
