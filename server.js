@@ -101,4 +101,7 @@ app.post("/reiniciar-turnos", async (req, res) => {
 });
 app.get("/health", (req, res) => res.status(200).send("OK"));
 const port = process.env.PORT || 10000;
-app.listen(port, () => console.log(`Servidor activo en puerto ${port}`));
+const host = process.env.HOST || '0.0.0.0';
+app.listen(port, host, () => {
+  console.log(`Servidor corriendo en http://${host}:${port}`);
+});
