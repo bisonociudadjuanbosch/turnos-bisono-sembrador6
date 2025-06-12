@@ -1,68 +1,58 @@
-// server.js - Backend consolidado y corregido para Turnos Bisonó
+// server.js - Backend actualizado con MongoDB para Turnos Bisonó
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const mongoose = require("mongoose");
+
+const Turno = require("./models/Turno");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const TURNOS_FILE = path.join(__dirname, "db.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const CARPETA_IMAGENES = path.join(PUBLIC_DIR, "turnos");
-
-// Crear carpeta de imágenes si no existe
 if (!fs.existsSync(CARPETA_IMAGENES)) fs.mkdirSync(CARPETA_IMAGENES, { recursive: true });
 
+// Middleware
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
-
-// Servir archivos estáticos del frontend
 app.use(express.static(PUBLIC_DIR));
-
-// Servir imágenes de tickets
 app.use("/turnos", express.static(CARPETA_IMAGENES));
 
-// Cargar turnos desde archivo (persistencia)
-let turnos = [];
-if (fs.existsSync(TURNOS_FILE)) {
-  turnos = JSON.parse(fs.readFileSync(TURNOS_FILE));
-}
+// Conexión a MongoDB
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log("✅ MongoDB conectado"))
+  .catch(err => console.error("❌ Error de conexión a MongoDB:", err));
 
-function guardarTurnos() {
-  fs.writeFileSync(TURNOS_FILE, JSON.stringify(turnos, null, 2));
-}
+app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 
 // ENDPOINT: Obtener todos los turnos
-app.get("/turnos", (req, res) => {
-  res.json({ resultados: turnos });
+app.get("/turnos", async (req, res) => {
+  const resultados = await Turno.find().sort({ createdAt: -1 });
+  res.json({ resultados });
 });
 
 // ENDPOINT: Agregar nuevo turno
-app.post("/agregar-turno", (req, res) => {
+app.post("/agregar-turno", async (req, res) => {
   const { numero, telefono, nombre } = req.body;
   if (!numero || !telefono || !nombre) return res.status(400).json({ error: "Faltan datos" });
 
-  const nuevoTurno = { numero, telefono, nombre, etapa: "Pendiente" };
-  turnos.push(nuevoTurno);
-  guardarTurnos();
+  const nuevoTurno = await Turno.create({ numero, telefono, nombre });
   res.json(nuevoTurno);
 });
 
 // ENDPOINT: Cambiar estado del turno
-app.post("/cambiar-etapa", (req, res) => {
+app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
-  const turno = turnos.find(t => t.numero === numero);
+  const turno = await Turno.findOneAndUpdate({ numero }, { etapa: nuevaEtapa }, { new: true });
   if (!turno) return res.status(404).json({ error: "Turno no encontrado" });
-
-  turno.etapa = nuevaEtapa;
-  guardarTurnos();
   res.json({ mensaje: "Etapa actualizada", turno });
 });
 
-// ENDPOINT: Subir imagen base64 y devolver URL
+// ENDPOINT: Subir imagen base64
 app.post("/subir-imagen", (req, res) => {
   const { base64, nombreArchivo } = req.body;
   if (!base64 || !nombreArchivo) return res.status(400).json({ error: "Faltan datos" });
@@ -74,25 +64,36 @@ app.post("/subir-imagen", (req, res) => {
   res.json({ url });
 });
 
-// ENDPOINT: Enviar mensaje de WhatsApp (texto plano)
+// ENDPOINT: Enviar mensaje WhatsApp (plantilla con imagen)
 app.post("/enviar-whatsapp", async (req, res) => {
-  const { numeroTelefono, mensaje } = req.body;
-  if (!numeroTelefono || !mensaje) return res.status(400).json({ error: "Datos incompletos" });
+  const { numeroTelefono, plantillaId, nombreCliente, imagenUrl } = req.body;
+  if (!numeroTelefono || !plantillaId || !nombreCliente || !imagenUrl) {
+    return res.status(400).json({ error: "Datos incompletos para la plantilla" });
+  }
 
   try {
-    const response = await axios.post("https://api.gupshup.io/sm/api/v1/msg", null, {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        apikey: process.env.GUPSHUP_APIKEY
-      },
-      params: {
+    const response = await axios.post("https://api.gupshup.io/wa/api/v1/template/msg",
+      new URLSearchParams({
         channel: "whatsapp",
         source: process.env.GUPSHUP_SOURCE,
         destination: numeroTelefono,
-        message: JSON.stringify({ type: "text", text: mensaje }),
-        "src.name": process.env.GUPSHUP_SRC_NAME
+        "src.name": process.env.GUPSHUP_SRC_NAME,
+        template: JSON.stringify({
+          id: plantillaId,
+          params: [nombreCliente]
+        }),
+        message: JSON.stringify({
+          type: "image",
+          image: { link: imagenUrl }
+        })
+      }),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "apikey": process.env.GUPSHUP_APIKEY
+        }
       }
-    });
+    );
 
     res.json({ status: "ok", data: response.data });
   } catch (err) {

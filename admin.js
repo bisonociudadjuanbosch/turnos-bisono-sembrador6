@@ -1,10 +1,11 @@
-// admin.js - Panel administrativo
+// admin.js - Panel administrativo con integración WhatsApp
 const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const tabla = document.querySelector("#tabla-turnos tbody");
   const res = await fetch(`${backendURL}/turnos`);
-  const turnos = await res.json();
+  const data = await res.json();
+  const turnos = data.resultados || [];
 
   for (let turno of turnos) {
     const fila = document.createElement("tr");
@@ -15,10 +16,10 @@ window.addEventListener("DOMContentLoaded", async () => {
       <td>${turno.etapa}</td>
       <td>
         <select class="nuevo-estado">
-          <option>Pendiente</option>
-          <option>En Proceso</option>
-          <option>Asistido</option>
-          <option>Finalizado</option>
+          <option${turno.etapa === "Pendiente" ? " selected" : ""}>Pendiente</option>
+          <option${turno.etapa === "En Proceso" ? " selected" : ""}>En Proceso</option>
+          <option${turno.etapa === "Asistido" ? " selected" : ""}>Asistido</option>
+          <option${turno.etapa === "Finalizado" ? " selected" : ""}>Finalizado</option>
         </select>
       </td>
       <td>
@@ -38,7 +39,7 @@ document.addEventListener("click", async (e) => {
     const nuevoEstado = fila.querySelector(".nuevo-estado").value;
     const resultado = fila.querySelector(".resultado");
 
-    resultado.textContent = "⏳...";
+    resultado.textContent = "⏳ Actualizando...";
     const res = await fetch(`${backendURL}/cambiar-etapa`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -50,18 +51,32 @@ document.addEventListener("click", async (e) => {
 
   if (e.target.classList.contains("btn-whatsapp")) {
     const fila = e.target.closest("tr");
+    const numero = fila.cells[0].textContent;
+    const nombre = fila.cells[1].textContent;
     const telefono = fila.cells[2].textContent;
     const resultado = fila.querySelector(".resultado");
+
     resultado.textContent = "⏳ Enviando...";
 
-    const mensaje = "¡Hola! Es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó. Gracias por preferirnos.";
-    const res = await fetch(`${backendURL}/enviar-turno`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ telefono, mensaje })
-    });
+    try {
+      const linkImagen = `${backendURL}/turnos/turno_${numero}.jpg`;
 
-    const data = await res.json();
-    resultado.textContent = res.ok ? "✅ WhatsApp enviado" : `❌ ${data.error}`;
+      const res = await fetch(`${backendURL}/enviar-whatsapp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          numeroTelefono: telefono,
+          plantillaId: "b7648d2e-cc8b-428d-8552-d3374061df33",
+          nombreCliente: nombre,
+          imagenUrl: linkImagen
+        })
+      });
+
+      const data = await res.json();
+      resultado.textContent = res.ok ? "✅ WhatsApp enviado" : `❌ ${data.error}`;
+    } catch (err) {
+      console.error(err);
+      resultado.textContent = "❌ Error al enviar";
+    }
   }
 });
