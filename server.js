@@ -1,4 +1,3 @@
-// server.js - Backend actualizado con MongoDB y reinicio de turnos
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -25,7 +24,9 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB conectado"))
   .catch(err => console.error("❌ Error de conexión a MongoDB:", err));
 
-app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 app.get("/turnos", async (req, res) => {
   const resultados = await Turno.find().sort({ createdAt: -1 });
@@ -89,7 +90,6 @@ app.post("/enviar-whatsapp", async (req, res) => {
   }
 });
 
-// NUEVO ENDPOINT: Reiniciar el conteo diario (eliminar todos los turnos)
 app.post("/reiniciar-turnos", async (req, res) => {
   try {
     await Turno.deleteMany({});
@@ -99,8 +99,7 @@ app.post("/reiniciar-turnos", async (req, res) => {
     res.status(500).json({ error: "Error al reiniciar los turnos." });
   }
 });
-app.get("/", (req, res) =>
-  res.sendFile(path.join(__dirname, "public", "index.html"))
-);
 
-app.listen(PORT, () => console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`)
+);
