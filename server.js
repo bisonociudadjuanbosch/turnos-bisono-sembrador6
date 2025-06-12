@@ -1,3 +1,4 @@
+// server.js
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -9,9 +10,12 @@ const mongoose = require("mongoose");
 const Turno = require("./models/Turno");
 
 const app = express();
-const port = process.env.PORT || 10000;
-const host = '0.0.0.0';
 
+// Puerto y host para Render
+const port = parseInt(process.env.PORT, 10) || 10000;
+const host = "0.0.0.0";
+
+// Directorio público y de imágenes
 const PUBLIC_DIR = path.join(__dirname, "public");
 const IMG_DIR = path.join(PUBLIC_DIR, "turnos");
 if (!fs.existsSync(IMG_DIR)) fs.mkdirSync(IMG_DIR, { recursive: true });
@@ -21,23 +25,26 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.static(PUBLIC_DIR));
 app.use("/turnos", express.static(IMG_DIR));
 
+// Conexión a MongoDB
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB conectado"))
   .catch(err => console.error("❌ Error de conexión a MongoDB:", err));
 
-app.get('/', (req, res) => {
-  res.send('✅ Service is live!');
-});
+app.get("/", (req, res) => res.send("✅ Service is live!"));
+app.get("/health", (req, res) => res.status(200).send("OK"));
 
 app.get("/turnos", async (req, res) => {
-  const resultados = await Turno.find().sort({ createdAt: -1 });
-  res.json({ resultados });
+  try {
+    const resultados = await Turno.find().sort({ createdAt: -1 });
+    res.json({ resultados });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post("/agregar-turno", async (req, res) => {
   const { numero, telefono, nombre } = req.body;
   if (!numero || !telefono || !nombre) return res.status(400).json({ error: "Faltan datos" });
-
   const nuevoTurno = await Turno.create({ numero, telefono, nombre });
   res.json(nuevoTurno);
 });
@@ -54,20 +61,22 @@ app.post("/subir-imagen", (req, res) => {
   if (!base64 || !nombreArchivo) return res.status(400).json({ error: "Faltan datos" });
 
   const data = base64.replace(/^data:image\/jpeg;base64,/, "");
-  const ruta = path.join(CARPETA_IMAGENES, nombreArchivo);
+  const ruta = path.join(IMG_DIR, nombreArchivo);
   fs.writeFileSync(ruta, data, "base64");
+
   const url = `${req.protocol}://${req.get("host")}/turnos/${nombreArchivo}`;
   res.json({ url });
 });
 
 app.post("/enviar-whatsapp", async (req, res) => {
   const { numeroTelefono, plantillaId, nombreCliente, imagenUrl } = req.body;
-  if (!numeroTelefono || !plantillaId || !nombreCliente || !imagenUrl) {
+  if (![numeroTelefono, plantillaId, nombreCliente, imagenUrl].every(Boolean)) {
     return res.status(400).json({ error: "Datos incompletos para la plantilla" });
   }
 
   try {
-    const response = await axios.post("https://api.gupshup.io/wa/api/v1/template/msg",
+    const response = await axios.post(
+      "https://api.gupshup.io/wa/api/v1/template/msg",
       new URLSearchParams({
         channel: "whatsapp",
         source: process.env.GUPSHUP_SOURCE,
@@ -76,14 +85,8 @@ app.post("/enviar-whatsapp", async (req, res) => {
         template: JSON.stringify({ id: plantillaId, params: [nombreCliente] }),
         message: JSON.stringify({ type: "image", image: { link: imagenUrl } })
       }),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "apikey": process.env.GUPSHUP_APIKEY
-        }
-      }
+      { headers: { "Content-Type": "application/x-www-form-urlencoded", "apikey": process.env.GUPSHUP_APIKEY } }
     );
-
     res.json({ status: "ok", data: response.data });
   } catch (err) {
     console.error("Error enviando WhatsApp:", err.message);
@@ -100,7 +103,6 @@ app.post("/reiniciar-turnos", async (req, res) => {
     res.status(500).json({ error: "Error al reiniciar los turnos." });
   }
 });
-app.get("/health", (req, res) => res.status(200).send("OK"));
 
 app.listen(port, host, () => {
   console.log(`Servidor corriendo en http://${host}:${port}`);
