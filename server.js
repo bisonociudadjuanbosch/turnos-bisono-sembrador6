@@ -9,16 +9,16 @@ const mongoose = require("mongoose");
 const Turno = require("./models/Turno");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT) || 3000;
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const CARPETA_IMAGENES = path.join(PUBLIC_DIR, "turnos");
-if (!fs.existsSync(CARPETA_IMAGENES)) fs.mkdirSync(CARPETA_IMAGENES, { recursive: true });
+const IMG_DIR = path.join(PUBLIC_DIR, "turnos");
+if (!fs.existsSync(IMG_DIR)) fs.mkdirSync(IMG_DIR, { recursive: true });
 
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static(PUBLIC_DIR));
-app.use("/turnos", express.static(CARPETA_IMAGENES));
+app.use("/turnos", express.static(IMG_DIR));
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB conectado"))
@@ -100,6 +100,6 @@ app.post("/reiniciar-turnos", async (req, res) => {
   }
 });
 app.get("/health", (req, res) => res.status(200).send("OK"));
-app.listen(PORT, () =>
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`)
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 Servidor escuchando en 0.0.0.0:${PORT}`)
 );
