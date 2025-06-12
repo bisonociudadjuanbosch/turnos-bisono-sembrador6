@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turnos - Constructora Bisonó</title>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script defer src="index.js"></script>
+  <style>
+    body { font-family: Arial; text-align: center; background: #f4f4f4; margin: 20px; }
+    .ticket { background: white; padding: 20px; border-radius: 10px; max-width: 400px; margin: auto; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
+    .turno-grande { font-size: 40px; font-weight: bold; margin: 20px 0; }
+    .formulario input { padding: 10px; margin: 5px; width: 90%; border-radius: 8px; border: 1px solid #ccc; }
+    .botones button { padding: 10px 15px; margin: 5px; border: none; border-radius: 8px; background-color: #007bff; color: white; cursor: pointer; }
+    .botones button:hover { background-color: #0056b3; }
+  </style>
+</head>
+<body>
+
+  <div class="formulario">
+    <input type="text" id="nombre" placeholder="Tu nombre completo" required />
+    <input type="tel" id="telefono" placeholder="Tu número de WhatsApp" required />
+  </div>
+
+  <div id="ticket" class="ticket">
+    <h1>Constructora Bisonó</h1>
+    <p><strong>Calle Olof Palme, esquina Av. Luperón</strong><br>Distrito Nacional, República Dominicana<br>Tel: 809-548-6353</p>
+    <h3>Residencial El Sembrador VI</h3>
+    <p><strong>Ciudad Juan Bosch</strong><br>Santo Domingo Este</p>
+    <h2>TURNO</h2>
+    <div id="numero-turno" class="turno-grande">T-0000</div>
+    <div id="fecha-hora"></div>
+    <div class="info-usuario">
+      <div id="nombre-mostrado"></div>
+      <div id="telefono-mostrado"></div>
+    </div>
+    <p>Cantidad de personas en espera: <span id="en-espera">0</span></p>
+  </div>
+
+  <div class="botones">
+    <button onclick="generarTurno()">Generar Turno</button>
+    <button onclick="descargar()">Descargar Turno</button>
+    <button onclick="compartirWhatsApp()">Compartir por WhatsApp</button>
+    <button onclick="location.href='admin.html'">Panel de Administración</button>
+  </div>
+
+</body>
+</html>
