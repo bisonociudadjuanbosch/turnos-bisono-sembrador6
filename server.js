@@ -100,6 +100,5 @@ app.post("/reiniciar-turnos", async (req, res) => {
   }
 });
 app.get("/health", (req, res) => res.status(200).send("OK"));
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Servidor escuchando en 0.0.0.0:${PORT}`)
-);
+const port = process.env.PORT || 10000;
+app.listen(port, () => console.log(`Servidor activo en puerto ${port}`));
