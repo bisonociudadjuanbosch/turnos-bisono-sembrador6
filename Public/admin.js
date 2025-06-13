@@ -9,6 +9,15 @@ btnFiltrar.addEventListener("click", () => {
   cargarTurnos(filtros);
 });
 
+function getFiltrosActuales() {
+  return {
+    nombre: filtroNombre.value.trim(),
+    telefono: filtroTelefono.value.trim(),
+    fecha: filtroFecha.value.trim(),
+    etapa: filtroEtapa.value,
+  };
+}
+
 async function cargarTurnos(filtros = {}) {
   try {
     const res = await fetch(`${API_URL}/turnos`);

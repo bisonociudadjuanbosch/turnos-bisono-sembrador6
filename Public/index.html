@@ -2,9 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel Administrativo - Bisonó</title>
-  <script defer src="admin.js"></script>
   <link rel="stylesheet" href="styles.css">
+  <script defer src="admin.js"></script>
 </head>
 <body>
   <h1>Panel de Administración - Constructora Bisonó</h1>
@@ -15,12 +16,12 @@
     <input type="date" id="filtro-fecha">
     <select id="filtro-etapa">
       <option value="">Todas las etapas</option>
-      <option>Pendiente</option>
-      <option>Visitando apartamento modelo</option>
-      <option>Precalificando con el banco</option>
-      <option>En Proceso</option>
-      <option>Finalizado</option>
-      <option>OK</option>
+      <option value="Pendiente">Pendiente</option>
+      <option value="Visitando apartamento modelo">Visitando apartamento modelo</option>
+      <option value="Precalificando con el banco">Precalificando con el banco</option>
+      <option value="En Proceso">En Proceso</option>
+      <option value="Finalizado">Finalizado</option>
+      <option value="OK">OK</option>
     </select>
     <button id="btn-filtrar">Generar Reporte</button>
     <button id="reiniciar-conteo">Reiniciar conteo diario</button>
