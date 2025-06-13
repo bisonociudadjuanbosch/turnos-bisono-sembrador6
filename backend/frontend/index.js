@@ -149,6 +149,18 @@ async function enviarWhatsApp(telefono) {
     throw error;
   }
 }
+const { enviarWhatsApp } = require("./gupshup");
+
+app.post("/cambiar-etapa", async (req, res) => {
+  // ...
+  try {
+    await enviarWhatsApp(siguiente.telefono, "¡Hola! es tu turno...");
+    // ...
+  } catch (err) {
+    // manejo de error
+  }
+  // ...
+});
 
 // --- Inicio del servidor ---
 const PORT = process.env.PORT || 10000;
