@@ -5,7 +5,7 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const Turno = require("./models/Turno");
+const Turno = require("./models/turno");
 const axios = require("axios");
 
 const app = express();

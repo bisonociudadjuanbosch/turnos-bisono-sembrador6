@@ -1,4 +1,4 @@
-// models/Turno.js
+// models/turno.js
 const mongoose = require("mongoose");
 
 // Definición del esquema para un turno
