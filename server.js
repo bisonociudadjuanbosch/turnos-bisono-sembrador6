@@ -34,9 +34,7 @@ mongoose.connect(process.env.MONGO_URI || "mongodb://localhost/turnos", {
 app.get("/health", (req, res) => res.status(200).send("OK"));
 
 // Ruta principal
-app.get("/", (req, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"))
-);
+app.get("/", (req, res) => res.send("🟢 API de Turnos Bisonó funcionando."));
 
 // 📌 Crear nuevo turno
 app.post("/turnos", async (req, res) => {
