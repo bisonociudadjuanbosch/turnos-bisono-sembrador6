@@ -38,15 +38,6 @@ app.get("/", (req, res) =>
   res.sendFile(path.join(PUBLIC_DIR, "index.html"))
 );
 
-// 📄 Modelo de Turno
-const Turno = mongoose.model("Turno", new mongoose.Schema({
-  numero: { type: String, required: true },
-  nombre: { type: String, required: true },
-  telefono: { type: String, required: true },
-  fechaHora: { type: String, required: true },
-  etapa: { type: String, default: "Pendiente" }
-}));
-
 // 📌 Crear nuevo turno
 app.post("/turnos", async (req, res) => {
   try {
