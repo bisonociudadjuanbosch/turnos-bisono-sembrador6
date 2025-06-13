@@ -1,72 +1,157 @@
-// index.js - Lógica de generación de turno y envío
-const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com";
-let turnoActual = 0;
+// index.js
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
+const mongoose = require("mongoose");
+const crypto = require("crypto");
 
-function generarTurno() {
-  const nombre = document.getElementById("nombre").value.trim();
-  const telefono = document.getElementById("telefono").value.trim();
-  if (!nombre || !telefono) {
-    alert("Por favor ingresa tu nombre y número de WhatsApp.");
-    return;
+const app = express();
+
+// --- Configuración ---
+const TICKETS_DIR = path.join(__dirname, "turnos");
+if (!fs.existsSync(TICKETS_DIR)) fs.mkdirSync(TICKETS_DIR, { recursive: true });
+
+app.use(cors());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+app.use("/turnos", express.static(TICKETS_DIR));
+
+// --- Conectar MongoDB ---
+const mongoURI = process.env.MONGODB_URI || "mongodb+srv://bisonociudadjuanbosch:Bisono123@cluster0.xjit6wb.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+
+mongoose.connect(mongoURI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log("✅ Conectado a MongoDB"))
+.catch(err => {
+  console.error("❌ Error conexión MongoDB:", err);
+  process.exit(1);
+});
+
+// --- Definir esquema y modelo ---
+const turnoSchema = new mongoose.Schema({
+  numero: { type: String, required: true, unique: true },
+  telefono: { type: String, required: true },
+  etapa: { type: String, required: true, default: "Pendiente" },
+  // Puedes agregar más campos según necesidades, como fecha, nombre, etc.
+}, { timestamps: true });
+
+const Turno = mongoose.model("Turno", turnoSchema);
+
+// --- Endpoints ---
+
+// Obtener todos los turnos
+app.get("/turnos", async (req, res) => {
+  try {
+    const turnos = await Turno.find().sort({ createdAt: 1 });
+    res.json(turnos);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al obtener turnos" });
   }
+});
 
-  turnoActual++;
-  const numero = "T-" + turnoActual.toString().padStart(4, "0");
-  const ahora = new Date();
-  const fechaHora = ahora.toLocaleString("es-DO", {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
+// Cambiar etapa de un turno
+app.post("/cambiar-etapa", async (req, res) => {
+  try {
+    const { numero, nuevaEtapa } = req.body;
+    if (!numero || !nuevaEtapa) return res.status(400).json({ error: "Faltan datos" });
 
-  document.getElementById("numero-turno").innerText = numero;
-  document.getElementById("fecha-hora").innerText = "Fecha y hora: " + fechaHora;
-  document.getElementById("nombre-mostrado").innerText = "Cliente: " + nombre;
-  document.getElementById("telefono-mostrado").innerText = "Tel: " + telefono;
-  document.getElementById("en-espera").innerText = Math.max(0, turnoActual - 1);
+    const turno = await Turno.findOne({ numero });
+    if (!turno) return res.status(404).json({ error: "Turno no encontrado" });
 
-  fetch(`${backendURL}/agregar-turno`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ numero, nombre, telefono })
-  });
-}
+    turno.etapa = nuevaEtapa;
+    await turno.save();
+    console.log(`✅ Turno ${numero} → ${nuevaEtapa}`);
 
-function descargar() {
-  const ticket = document.getElementById("ticket");
-  html2canvas(ticket, { backgroundColor: "#ffffff", scale: 2 }).then(canvas => {
-    const link = document.createElement("a");
-    link.download = "turno.jpg";
-    link.href = canvas.toDataURL("image/jpeg", 1.0);
-    link.click();
-  });
-}
+    // Notificar siguiente pendiente (por fecha de creación)
+    const siguiente = await Turno.findOne({ etapa: "Pendiente", _id: { $ne: turno._id } }).sort({ createdAt: 1 });
+    if (siguiente) {
+      try {
+        await enviarWhatsApp(siguiente.telefono);
+        console.log(`📲 Notificado a ${siguiente.telefono}`);
+      } catch (e) {
+        console.error("❌ Error al notificar:", e.response?.data || e.message);
+      }
+    }
 
-async function compartirWhatsApp() {
-  const nombre = document.getElementById("nombre").value.trim();
-  const telefono = document.getElementById("telefono").value.trim();
-  const ticket = document.getElementById("ticket");
-  if (!nombre || !telefono) {
-    alert("Faltan datos del cliente.");
-    return;
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al cambiar etapa" });
   }
+});
 
-  const canvas = await html2canvas(ticket, { backgroundColor: "#fff", scale: 2 });
-  const base64 = canvas.toDataURL("image/jpeg", 1.0);
+// Agregar un nuevo turno (recomendado)
+app.post("/turnos", async (req, res) => {
+  try {
+    const { numero, telefono } = req.body;
+    if (!numero || !telefono) return res.status(400).json({ error: "Faltan datos" });
 
-  const subida = await fetch(`${backendURL}/subir-imagen`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imagenBase64: base64, nombre })
-  });
+    // Validar que no exista el turno con mismo número
+    const existe = await Turno.findOne({ numero });
+    if (existe) return res.status(409).json({ error: "Turno ya existe" });
 
-  const { url } = await subida.json();
+    const nuevoTurno = new Turno({ numero, telefono });
+    await nuevoTurno.save();
+    res.status(201).json(nuevoTurno);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al crear turno" });
+  }
+});
 
-  const mensaje = "¡Hola! Es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó. Gracias por preferirnos.";
-  await fetch(`${backendURL}/enviar-turno`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ telefono, mensaje })
-  });
+// Subir imagen ticket
+app.post("/subir-imagen", async (req, res) => {
+  try {
+    const { imagen } = req.body;
+    if (!imagen) return res.status(400).json({ error: "Falta campo 'imagen'" });
 
-  alert("Turno enviado por WhatsApp. Asegúrate de haber hecho opt-in.");
+    const base64 = imagen.replace(/^data:image\/\w+;base64,/, "");
+    const filename = `turno_${crypto.randomUUID()}.jpg`;
+    const filepath = path.join(TICKETS_DIR, filename);
+
+    await fs.promises.writeFile(filepath, base64, "base64");
+
+    const url = `${req.protocol}://${req.get("host")}/turnos/${filename}`;
+    res.json({ url });
+  } catch (err) {
+    console.error("Error al guardar imagen:", err);
+    res.status(500).json({ error: "Error al guardar imagen" });
+  }
+});
+
+// Función para enviar WhatsApp usando 360dialog
+async function enviarWhatsApp(telefono) {
+  if (!telefono) throw new Error("Teléfono vacío");
+  const telFormateado = telefono.replace(/\D/g, "");
+  const token = process.env.WHATSAPP_API_KEY;
+  if (!token) throw new Error("Falta WHATSAPP_API_KEY en .env");
+
+  try {
+    await axios.post("https://api.360dialog.io/v1/messages", {
+      to: `+${telFormateado}`,
+      type: "text",
+      text: { body: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó." }
+    }, {
+      headers: {
+        "Content-Type": "application/json",
+        "D360-API-KEY": token
+      }
+    });
+  } catch (error) {
+    console.error("Error en enviarWhatsApp:", error.response?.data || error.message);
+    throw error;
+  }
 }
+
+// --- Inicio del servidor ---
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+});

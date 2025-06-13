@@ -1,121 +1,156 @@
+// index.js
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+const mongoose = require("mongoose");
+const crypto = require("crypto");
 
 const app = express();
 
-// Configurar middleware
+// --- Configuración ---
+const TICKETS_DIR = path.join(__dirname, "turnos");
+if (!fs.existsSync(TICKETS_DIR)) fs.mkdirSync(TICKETS_DIR, { recursive: true });
+
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// Crear la carpeta 'turnos' si no existe
-const TURNOS_FOLDER = path.join(__dirname, "turnos");
-if (!fs.existsSync(TURNOS_FOLDER)) {
-  fs.mkdirSync(TURNOS_FOLDER, { recursive: true });
-}
+app.use("/turnos", express.static(TICKETS_DIR));
 
-// Base de datos temporal en memoria
-let turnos = [];
+// --- Conectar MongoDB ---
+const mongoURI = process.env.MONGODB_URI || "mongodb+srv://bisonociudadjuanbosch:Bisono123@cluster0.xjit6wb.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
-// Endpoint para obtener todos los turnos
-app.get("/turnos", (req, res) => {
-  res.json(turnos);
+mongoose.connect(mongoURI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log("✅ Conectado a MongoDB"))
+.catch(err => {
+  console.error("❌ Error conexión MongoDB:", err);
+  process.exit(1);
 });
 
-// Endpoint para cambiar el estado de un turno y notificar al siguiente
-app.post("/cambiar-etapa", async (req, res) => {
-  const { numero, nuevaEtapa } = req.body;
-  const idx = turnos.findIndex(t => t.numero === numero);
-  if (idx < 0) return res.status(404).json({ error: "Turno no encontrado" });
+// --- Definir esquema y modelo ---
+const turnoSchema = new mongoose.Schema({
+  numero: { type: String, required: true, unique: true },
+  telefono: { type: String, required: true },
+  etapa: { type: String, required: true, default: "Pendiente" },
+  // Puedes agregar más campos según necesidades, como fecha, nombre, etc.
+}, { timestamps: true });
 
-  turnos[idx].etapa = nuevaEtapa;
-  console.log(`✅ Turno ${numero} → ${nuevaEtapa}`);
+const Turno = mongoose.model("Turno", turnoSchema);
 
-  const siguiente = turnos.find((t, i) => i > idx && t.etapa === "Pendiente");
-  if (siguiente) {
-    try {
-      await enviarWhatsApp(siguiente.telefono);
-      console.log(`📲 WhatsApp enviado a ${siguiente.telefono}`);
-    } catch (e) {
-      console.error("❌ Error enviando WhatsApp:", e.response?.data || e.message);
-    }
-  }
+// --- Endpoints ---
 
-  res.json({ success: true });
-});
-
-// Función para enviar notificación por WhatsApp usando 360dialog (puedes cambiar si usas Gupshup)
-async function enviarWhatsApp(telefono) {
-  const token = process.env.WHATSAPP_API_KEY;
-  await axios.post("https://api.360dialog.io/v1/messages", {
-    to: `+${telefono.replace(/\D/g, "")}`,
-    type: "text",
-    text: { body: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó." }
-  }, {
-    headers: {
-      "Content-Type": "application/json",
-      "D360-API-KEY": token
-    }
-  });
-}
-
-// Endpoint para enviar WhatsApp vía Gupshup con JSON {numeroTelefono, mensaje}
-app.post("/enviar-whatsapp", async (req, res) => {
-  const { numeroTelefono, mensaje } = req.body;
-
-  if (!numeroTelefono || !mensaje) {
-    return res.status(400).json({ error: "Faltan parámetros: numeroTelefono y mensaje son requeridos" });
-  }
-
+// Obtener todos los turnos
+app.get("/turnos", async (req, res) => {
   try {
-    const params = new URLSearchParams();
-    params.append("channel", "whatsapp");
-    params.append("source", process.env.WHATSAPP_NUMERO_ORIGEN); // tu número origen en .env
-    params.append("destination", numeroTelefono);
-    params.append("message", JSON.stringify({ type: "text", text: mensaje }));
-    params.append("src.name", process.env.WHATSAPP_APP_ID); // tu App ID en .env
-
-    const response = await axios.post("https://api.gupshup.io/sm/api/v1/msg", params, {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "apikey": process.env.WHATSAPP_API_KEY, // tu api key en .env
-      },
-    });
-
-    return res.json({ success: true, data: response.data });
-  } catch (error) {
-    console.error("Error enviando WhatsApp:", error.response?.data || error.message);
-    return res.status(500).json({ error: "Error al enviar mensaje vía Gupshup" });
+    const turnos = await Turno.find().sort({ createdAt: 1 });
+    res.json(turnos);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al obtener turnos" });
   }
 });
 
-// Endpoint para subir imagen y devolver URL
-app.post("/subir-imagen", (req, res) => {
-  const { imagen } = req.body;
-  if (!imagen) return res.status(400).json({ error: "Falta campo 'imagen'" });
+// Cambiar etapa de un turno
+app.post("/cambiar-etapa", async (req, res) => {
+  try {
+    const { numero, nuevaEtapa } = req.body;
+    if (!numero || !nuevaEtapa) return res.status(400).json({ error: "Faltan datos" });
 
-  const base64 = imagen.replace(/^data:image\/\w+;base64,/, "");
-  const filename = `turno_${Date.now()}.jpg`;
-  const filePath = path.join(TURNOS_FOLDER, filename);
+    const turno = await Turno.findOne({ numero });
+    if (!turno) return res.status(404).json({ error: "Turno no encontrado" });
 
-  fs.writeFile(filePath, base64, "base64", err => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Error al guardar imagen" });
+    turno.etapa = nuevaEtapa;
+    await turno.save();
+    console.log(`✅ Turno ${numero} → ${nuevaEtapa}`);
+
+    // Notificar siguiente pendiente (por fecha de creación)
+    const siguiente = await Turno.findOne({ etapa: "Pendiente", _id: { $ne: turno._id } }).sort({ createdAt: 1 });
+    if (siguiente) {
+      try {
+        await enviarWhatsApp(siguiente.telefono);
+        console.log(`📲 Notificado a ${siguiente.telefono}`);
+      } catch (e) {
+        console.error("❌ Error al notificar:", e.response?.data || e.message);
+      }
     }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al cambiar etapa" });
+  }
+});
+
+// Agregar un nuevo turno (recomendado)
+app.post("/turnos", async (req, res) => {
+  try {
+    const { numero, telefono } = req.body;
+    if (!numero || !telefono) return res.status(400).json({ error: "Faltan datos" });
+
+    // Validar que no exista el turno con mismo número
+    const existe = await Turno.findOne({ numero });
+    if (existe) return res.status(409).json({ error: "Turno ya existe" });
+
+    const nuevoTurno = new Turno({ numero, telefono });
+    await nuevoTurno.save();
+    res.status(201).json(nuevoTurno);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al crear turno" });
+  }
+});
+
+// Subir imagen ticket
+app.post("/subir-imagen", async (req, res) => {
+  try {
+    const { imagen } = req.body;
+    if (!imagen) return res.status(400).json({ error: "Falta campo 'imagen'" });
+
+    const base64 = imagen.replace(/^data:image\/\w+;base64,/, "");
+    const filename = `turno_${crypto.randomUUID()}.jpg`;
+    const filepath = path.join(TICKETS_DIR, filename);
+
+    await fs.promises.writeFile(filepath, base64, "base64");
+
     const url = `${req.protocol}://${req.get("host")}/turnos/${filename}`;
     res.json({ url });
-  });
+  } catch (err) {
+    console.error("Error al guardar imagen:", err);
+    res.status(500).json({ error: "Error al guardar imagen" });
+  }
 });
 
-// Servir carpeta de imágenes
-app.use("/turnos", express.static(TURNOS_FOLDER));
+// Función para enviar WhatsApp usando 360dialog
+async function enviarWhatsApp(telefono) {
+  if (!telefono) throw new Error("Teléfono vacío");
+  const telFormateado = telefono.replace(/\D/g, "");
+  const token = process.env.WHATSAPP_API_KEY;
+  if (!token) throw new Error("Falta WHATSAPP_API_KEY en .env");
 
-// Iniciar el servidor
+  try {
+    await axios.post("https://api.360dialog.io/v1/messages", {
+      to: `+${telFormateado}`,
+      type: "text",
+      text: { body: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó." }
+    }, {
+      headers: {
+        "Content-Type": "application/json",
+        "D360-API-KEY": token
+      }
+    });
+  } catch (error) {
+    console.error("Error en enviarWhatsApp:", error.response?.data || error.message);
+    throw error;
+  }
+}
+
+// --- Inicio del servidor ---
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);

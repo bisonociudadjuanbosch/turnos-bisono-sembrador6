@@ -1,216 +1,177 @@
-<<<<<<< HEAD
+require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-=======
-// server.js - Backend consolidado y corregido para Turnos Bisonó
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const fs = require("fs");
-const path = require("path");
 const axios = require("axios");
->>>>>>> 276a9aed433d5ac5ef4be51063eff16ca2e9d597
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-<<<<<<< HEAD
-// Middlewares
-app.use(cors());
-app.use(bodyParser.json({ limit: "10mb" }));
+// 📂 Directorios
+const PUBLIC_DIR = path.join(__dirname, "public");
+const CARPETA_IMAGENES = path.join(PUBLIC_DIR, "turnos");
+if (!fs.existsSync(CARPETA_IMAGENES)) fs.mkdirSync(CARPETA_IMAGENES, { recursive: true });
 
-// Conexión a MongoDB con manejo de errores
+// 🔧 Middlewares
+app.use(cors());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.static(PUBLIC_DIR));
+app.use("/turnos", express.static(CARPETA_IMAGENES));
+
+// 🛠️ Conexión a MongoDB
 mongoose.connect(process.env.MONGO_URI || "mongodb://localhost/turnos", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-  .then(() => {
-    console.log("✅ Conectado a MongoDB");
-  })
-  .catch((err) => {
-    console.error("❌ Error al conectar a MongoDB:", err.message);
-  });
+.then(() => console.log("✅ Conectado a MongoDB"))
+.catch(err => console.error("❌ Error al conectar a MongoDB:", err.message));
 
-// Modelo de datos
+// 📄 Modelo de Turno
 const Turno = mongoose.model("Turno", new mongoose.Schema({
-  numero: String,
-  nombre: String,
-  telefono: String,
-  fechaHora: String,
-  etapa: String,
+  numero: { type: String, required: true },
+  nombre: { type: String, required: true },
+  telefono: { type: String, required: true },
+  fechaHora: { type: String, required: true },
+  etapa: { type: String, default: "Pendiente" }
 }));
 
-// Rutas
+// 📌 Crear nuevo turno
 app.post("/turnos", async (req, res) => {
   try {
-    const nuevo = await Turno.create(req.body);
+    const { numero, nombre, telefono, fechaHora } = req.body;
+
+    if (!numero || !nombre || !telefono || !fechaHora) {
+      return res.status(400).json({ error: "Todos los campos son obligatorios" });
+    }
+
+    const nuevo = await Turno.create({ numero, nombre, telefono, fechaHora });
     res.json(nuevo);
   } catch (err) {
+    console.error("❌ Error al registrar turno:", err.message);
     res.status(500).json({ error: "Error al registrar turno" });
   }
 });
 
+// 📋 Obtener todos los turnos
 app.get("/turnos", async (req, res) => {
-  const pagina = parseInt(req.query.pagina || 1);
-  const limite = parseInt(req.query.limite || 50);
   try {
-    const resultados = await Turno.find()
-      .skip((pagina - 1) * limite)
-      .limit(limite)
-      .sort({ _id: 1 }); // orden cronológico
+    const resultados = await Turno.find().sort({ _id: 1 });
     res.json({ resultados });
   } catch (err) {
+    console.error("❌ Error al obtener turnos:", err.message);
     res.status(500).json({ error: "Error al obtener turnos" });
   }
 });
 
+// 🔄 Cambiar etapa del turno y notificar al siguiente
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
+
+  if (!numero || !nuevaEtapa) {
+    return res.status(400).json({ error: "Faltan datos para cambiar la etapa" });
+  }
+
   try {
     const actualizado = await Turno.findOneAndUpdate(
       { numero },
       { etapa: nuevaEtapa },
       { new: true }
     );
-    if (!actualizado) return res.status(404).json({ error: "Turno no encontrado" });
+
+    if (!actualizado) {
+      return res.status(404).json({ error: "Turno no encontrado" });
+    }
+
+    // 🟢 Notificar al siguiente turno pendiente
+    const siguiente = await Turno.findOne({ etapa: "Pendiente" }).sort({ _id: 1 });
+    if (siguiente) {
+      await axios.post("https://api.gupshup.io/sm/api/v1/msg", null, {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          apikey: process.env.GUPSHUP_APIKEY,
+        },
+        params: {
+          channel: "whatsapp",
+          source: process.env.GUPSHUP_SOURCE,
+          destination: siguiente.telefono,
+          message: JSON.stringify({
+            type: "text",
+            text: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó."
+          }),
+          "src.name": process.env.GUPSHUP_SRC_NAME,
+        }
+      });
+    }
+
     res.json(actualizado);
   } catch (err) {
+    console.error("❌ Error cambiando etapa:", err.response?.data || err.message);
     res.status(500).json({ error: "Error al cambiar etapa" });
   }
 });
 
+// 🖼️ Subir imagen de turno
 app.post("/upload-turno", async (req, res) => {
   const { image } = req.body;
+
+  if (!image || !image.startsWith("data:image/jpeg;base64,")) {
+    return res.status(400).json({ error: "Imagen no válida" });
+  }
+
   try {
     const base64Data = image.replace(/^data:image\/jpeg;base64,/, "");
-
-    const publicDir = path.join(__dirname, "public");
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir);
-    }
-
     const filename = `turno-${crypto.randomUUID()}.jpg`;
-    const filePath = path.join(publicDir, filename);
+    const filePath = path.join(CARPETA_IMAGENES, filename);
+
     fs.writeFileSync(filePath, base64Data, "base64");
 
-    const url = `${req.protocol}://${req.get("host")}/${filename}`;
+    const url = `${req.protocol}://${req.get("host")}/turnos/${filename}`;
     res.json({ url });
   } catch (err) {
-    console.error("Error al guardar imagen:", err.message);
+    console.error("❌ Error al guardar imagen:", err.message);
     res.status(500).json({ error: "Error al guardar imagen" });
   }
 });
 
-// Archivos estáticos (imágenes)
-app.use(express.static("public"));
-
-// Ruta raíz informativa
-app.get("/", (req, res) => {
-  res.send("🟢 API de Turnos Bisonó funcionando. Usa /turnos para obtener turnos.");
-});
-
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor funcionando en http://localhost:${PORT}`);
-});
-=======
-const TURNOS_FILE = path.join(__dirname, "db.json");
-const PUBLIC_DIR = path.join(__dirname, "public");
-const CARPETA_IMAGENES = path.join(PUBLIC_DIR, "turnos");
-
-// Crear carpeta de imágenes si no existe
-if (!fs.existsSync(CARPETA_IMAGENES)) fs.mkdirSync(CARPETA_IMAGENES, { recursive: true });
-
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-
-// Servir archivos estáticos del frontend
-app.use(express.static(PUBLIC_DIR));
-
-// Servir imágenes de tickets
-app.use("/turnos", express.static(CARPETA_IMAGENES));
-
-// Cargar turnos desde archivo (persistencia)
-let turnos = [];
-if (fs.existsSync(TURNOS_FILE)) {
-  turnos = JSON.parse(fs.readFileSync(TURNOS_FILE));
-}
-
-function guardarTurnos() {
-  fs.writeFileSync(TURNOS_FILE, JSON.stringify(turnos, null, 2));
-}
-
-// ENDPOINT: Obtener todos los turnos
-app.get("/turnos", (req, res) => {
-  res.json({ resultados: turnos });
-});
-
-// ENDPOINT: Agregar nuevo turno
-app.post("/agregar-turno", (req, res) => {
-  const { numero, telefono, nombre } = req.body;
-  if (!numero || !telefono || !nombre) return res.status(400).json({ error: "Faltan datos" });
-
-  const nuevoTurno = { numero, telefono, nombre, etapa: "Pendiente" };
-  turnos.push(nuevoTurno);
-  guardarTurnos();
-  res.json(nuevoTurno);
-});
-
-// ENDPOINT: Cambiar estado del turno
-app.post("/cambiar-etapa", (req, res) => {
-  const { numero, nuevaEtapa } = req.body;
-  const turno = turnos.find(t => t.numero === numero);
-  if (!turno) return res.status(404).json({ error: "Turno no encontrado" });
-
-  turno.etapa = nuevaEtapa;
-  guardarTurnos();
-  res.json({ mensaje: "Etapa actualizada", turno });
-});
-
-// ENDPOINT: Subir imagen base64 y devolver URL
-app.post("/subir-imagen", (req, res) => {
-  const { base64, nombreArchivo } = req.body;
-  if (!base64 || !nombreArchivo) return res.status(400).json({ error: "Faltan datos" });
-
-  const data = base64.replace(/^data:image\/jpeg;base64,/, "");
-  const ruta = path.join(CARPETA_IMAGENES, nombreArchivo);
-  fs.writeFileSync(ruta, data, "base64");
-  const url = `${req.protocol}://${req.get("host")}/turnos/${nombreArchivo}`;
-  res.json({ url });
-});
-
-// ENDPOINT: Enviar mensaje de WhatsApp (texto plano)
+// 📲 Enviar WhatsApp directamente
 app.post("/enviar-whatsapp", async (req, res) => {
   const { numeroTelefono, mensaje } = req.body;
-  if (!numeroTelefono || !mensaje) return res.status(400).json({ error: "Datos incompletos" });
+
+  if (!numeroTelefono || !mensaje) {
+    return res.status(400).json({ error: "Datos incompletos" });
+  }
 
   try {
     const response = await axios.post("https://api.gupshup.io/sm/api/v1/msg", null, {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        apikey: process.env.GUPSHUP_APIKEY
+        apikey: process.env.GUPSHUP_APIKEY,
       },
       params: {
         channel: "whatsapp",
         source: process.env.GUPSHUP_SOURCE,
         destination: numeroTelefono,
         message: JSON.stringify({ type: "text", text: mensaje }),
-        "src.name": process.env.GUPSHUP_SRC_NAME
+        "src.name": process.env.GUPSHUP_SRC_NAME,
       }
     });
 
     res.json({ status: "ok", data: response.data });
   } catch (err) {
-    console.error("Error enviando WhatsApp:", err.message);
+    console.error("❌ Error enviando WhatsApp:", err.response?.data || err.message);
     res.status(500).json({ error: "Error enviando mensaje" });
   }
 });
 
-// INICIAR SERVIDOR
-app.listen(PORT, () => console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`));
->>>>>>> 276a9aed433d5ac5ef4be51063eff16ca2e9d597
+// 🧪 Ruta de prueba
+app.get("/", (req, res) => {
+  res.send("🟢 API de Turnos Bisonó funcionando. Usa /turnos para obtener turnos.");
+});
+
+// 🚀 Iniciar servidor
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+});
