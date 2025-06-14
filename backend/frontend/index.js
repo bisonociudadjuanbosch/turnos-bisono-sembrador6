@@ -62,6 +62,11 @@ app.post("/cambiar-etapa", async (req, res) => {
     const { numero, nuevaEtapa } = req.body;
     if (!numero || !nuevaEtapa) return res.status(400).json({ error: "Faltan datos" });
 
+    const estadosValidos = ["Pendiente", "En Proceso", "Asistido", "Finalizado"];
+    if (!estadosValidos.includes(nuevaEtapa)) {
+      return res.status(400).json({ error: "Estado inválido" });
+    }
+
     const turno = await Turno.findOne({ numero });
     if (!turno) return res.status(404).json({ error: "Turno no encontrado" });
 
@@ -69,14 +74,16 @@ app.post("/cambiar-etapa", async (req, res) => {
     await turno.save();
     console.log(`✅ Turno ${numero} → ${nuevaEtapa}`);
 
-    // Notificar siguiente pendiente (por fecha de creación)
-    const siguiente = await Turno.findOne({ etapa: "Pendiente", _id: { $ne: turno._id } }).sort({ createdAt: 1 });
-    if (siguiente) {
-      try {
-        await enviarWhatsApp(siguiente.telefono);
-        console.log(`📲 Notificado a ${siguiente.telefono}`);
-      } catch (e) {
-        console.error("❌ Error al notificar:", e.response?.data || e.message);
+    // Solo notificar si el estado avanza a asistido o finalizado
+    if (["Asistido", "Finalizado"].includes(nuevaEtapa)) {
+      const siguiente = await Turno.findOne({ etapa: "Pendiente", _id: { $ne: turno._id } }).sort({ createdAt: 1 });
+      if (siguiente) {
+        try {
+          await enviarWhatsApp(siguiente.telefono);
+          console.log(`📲 Notificado a ${siguiente.telefono}`);
+        } catch (e) {
+          console.error("❌ Error al notificar:", e.response?.data || e.message);
+        }
       }
     }
 
@@ -133,45 +140,29 @@ app.post("/subir-imagen", async (req, res) => {
   }
 });
 
-const multer = require("multer");
-const upload = multer({ dest: "tickets/" });
-
-app.post("/enviar-imagen-whatsapp", upload.single("imagen"), async (req, res) => {
-  const { nombre, telefono } = req.body;
-  const filePath = req.file.path;
+// Función para enviar WhatsApp usando 360dialog
+async function enviarWhatsApp(telefono) {
+  if (!telefono) throw new Error("Teléfono vacío");
+  const telFormateado = telefono.replace(/\D/g, "");
+  const token = process.env.WHATSAPP_API_KEY;
+  if (!token) throw new Error("Falta WHATSAPP_API_KEY en .env");
 
   try {
-    const imageBuffer = fs.readFileSync(filePath);
-    const base64Image = imageBuffer.toString("base64");
-
-    const params = new URLSearchParams({
-      channel: "whatsapp",
-      source: "18096690177",
-      destination: telefono,
-      "src.name": "ConstructoraBisono",
-      message: JSON.stringify({
-        type: "image",
-        originalUrl: `data:image/jpeg;base64,${base64Image}`,
-        previewUrl: `data:image/jpeg;base64,${base64Image}`,
-        caption: `Hola ${nombre}, aquí está tu turno generado. Te esperamos en Constructora Bisonó.`
-      })
-    });
-
-    const response = await axios.post("https://api.gupshup.io/wa/api/v1/msg", params, {
+    await axios.post("https://api.360dialog.io/v1/messages", {
+      to: `+${telFormateado}`,
+      type: "text",
+      text: { body: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó." }
+    }, {
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "apikey": "mqlyqhzffbgosadyap1vz6qpt8qzltku"
+        "Content-Type": "application/json",
+        "D360-API-KEY": token
       }
     });
-
-    res.json({ status: "ok", gupshup: response.data });
   } catch (error) {
-    console.error("Error al enviar imagen:", error.response?.data || error.message);
-    res.status(500).json({ error: "No se pudo enviar la imagen por WhatsApp" });
-  } finally {
-    fs.unlink(filePath, () => {});
+    console.error("Error en enviarWhatsApp:", error.response?.data || error.message);
+    throw error;
   }
-});
+}
 
 // --- Inicio del servidor ---
 const PORT = process.env.PORT || 10000;

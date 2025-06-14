@@ -1,69 +1,73 @@
+// Función para generar turno y obtener número desde backend
 function generarTurno() {
   const nombre = document.getElementById("nombre").value.trim();
   const telefono = document.getElementById("telefono").value.trim();
 
   if (!nombre || !telefono) {
-    alert("Por favor completa tu nombre y número de WhatsApp.");
+    alert("Por favor completa todos los campos.");
     return;
   }
 
-  const numero = "T-" + Math.floor(Math.random() * 10000).toString().padStart(4, "0");
-  const fechaHora = new Date().toLocaleString();
-
-  // Mostrar en pantalla
-  document.getElementById("numero-turno").innerText = numero;
-  document.getElementById("fecha-hora").innerText = fechaHora;
-  document.getElementById("nombre-mostrado").innerText = nombre;
-  document.getElementById("telefono-mostrado").innerText = telefono;
-
-  // Registrar en backend
   fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/turnos", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ numero, telefono })
+    body: JSON.stringify({ telefono, nombre }),
   })
-  .then(res => res.json())
-  .then(data => {
-    console.log("✅ Turno registrado:", data);
-    actualizarEspera();
-  })
-  .catch(err => {
-    console.error("❌ Error al registrar turno:", err);
-    alert("Hubo un problema al registrar tu turno.");
-  });
-}
+    .then((res) => res.json())
+    .then((data) => {
+      const numero = data.numero;
+      if (!numero) throw new Error("No se recibió número de turno");
 
-function descargar() {
-  const ticket = document.getElementById("ticket");
+      // Mostrar datos en el ticket
+      document.getElementById("numero-turno").innerText = numero;
+      document.getElementById("fecha-hora").innerText = new Date().toLocaleString();
+      document.getElementById("nombre-mostrado").innerText = nombre;
+      document.getElementById("telefono-mostrado").innerText = telefono;
 
-  html2canvas(ticket).then(canvas => {
-    const link = document.createElement("a");
-    link.download = "turno.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  });
-}
+      // Hacer visible el ticket
+      document.getElementById("ticket").style.display = "block";
 
-function compartirWhatsApp() {
-  const numero = document.getElementById("numero-turno").innerText;
-  const nombre = document.getElementById("nombre").value.trim();
-  const mensaje = encodeURIComponent(
-    `Hola ${nombre}, tu turno es ${numero}.\nTe esperamos en Constructora Bisonó.`
-  );
-
-  const url = `https://wa.me/?text=${mensaje}`;
-  window.open(url, "_blank");
-}
-
-function actualizarEspera() {
-  fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/turnos")
-    .then(res => res.json())
-    .then(turnos => {
-      const pendientes = turnos.filter(t => t.etapa === "Pendiente").length;
-      document.getElementById("en-espera").innerText = pendientes;
+      // Capturar imagen y subir
+      subirImagen();
     })
-    .catch(console.error);
+    .catch((err) => {
+      console.error(err);
+      alert("Error al generar turno. Intente de nuevo.");
+    });
 }
 
-// Ejecutar al cargar
-document.addEventListener("DOMContentLoaded", actualizarEspera);
+// Función para capturar ticket como imagen y enviarla al backend
+function subirImagen() {
+  const ticket = document.getElementById("ticket");
+  html2canvas(ticket).then((canvas) => {
+    const base64image = canvas.toDataURL("image/jpeg", 0.9);
+
+    fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/subir-imagen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imagen: base64image }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.url) {
+          alert("Turno generado y ticket guardado correctamente.");
+          // Opcional: mostrar enlace o la imagen guardada
+          console.log("URL ticket guardado:", data.url);
+        } else {
+          alert("Turno generado pero hubo un problema guardando el ticket.");
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        alert("Error al subir imagen del ticket.");
+      });
+  });
+}
+
+// Función para ocultar el ticket al cargar la página
+window.onload = () => {
+  const ticket = document.getElementById("ticket");
+  if (ticket) {
+    ticket.style.display = "none";
+  }
+};

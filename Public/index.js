@@ -62,6 +62,11 @@ app.post("/cambiar-etapa", async (req, res) => {
     const { numero, nuevaEtapa } = req.body;
     if (!numero || !nuevaEtapa) return res.status(400).json({ error: "Faltan datos" });
 
+    const estadosValidos = ["Pendiente", "En Proceso", "Asistido", "Finalizado"];
+    if (!estadosValidos.includes(nuevaEtapa)) {
+      return res.status(400).json({ error: "Estado inválido" });
+    }
+
     const turno = await Turno.findOne({ numero });
     if (!turno) return res.status(404).json({ error: "Turno no encontrado" });
 
@@ -69,14 +74,16 @@ app.post("/cambiar-etapa", async (req, res) => {
     await turno.save();
     console.log(`✅ Turno ${numero} → ${nuevaEtapa}`);
 
-    // Notificar siguiente pendiente (por fecha de creación)
-    const siguiente = await Turno.findOne({ etapa: "Pendiente", _id: { $ne: turno._id } }).sort({ createdAt: 1 });
-    if (siguiente) {
-      try {
-        await enviarWhatsApp(siguiente.telefono);
-        console.log(`📲 Notificado a ${siguiente.telefono}`);
-      } catch (e) {
-        console.error("❌ Error al notificar:", e.response?.data || e.message);
+    // Solo notificar si el estado avanza a asistido o finalizado
+    if (["Asistido", "Finalizado"].includes(nuevaEtapa)) {
+      const siguiente = await Turno.findOne({ etapa: "Pendiente", _id: { $ne: turno._id } }).sort({ createdAt: 1 });
+      if (siguiente) {
+        try {
+          await enviarWhatsApp(siguiente.telefono);
+          console.log(`📲 Notificado a ${siguiente.telefono}`);
+        } catch (e) {
+          console.error("❌ Error al notificar:", e.response?.data || e.message);
+        }
       }
     }
 

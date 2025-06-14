@@ -1,134 +1,88 @@
-document.addEventListener("DOMContentLoaded", obtenerTurnos);
+const backendURL = "https://turnos-bisono-sembrador6-v2n2.onrender.com";
 
-const safe = (str) => String(str || "").replace(/[&<>"']/g, s => ({
-  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-}[s]));
-
-const esTelefonoValido = (numero) => /^\+?\d{10,15}$/.test(numero);
-
-async function obtenerTurnos() {
+window.addEventListener("DOMContentLoaded", async () => {
   const tabla = document.querySelector("#tabla-turnos tbody");
-  tabla.innerHTML = "<tr><td colspan='7'>Cargando turnos...</td></tr>";
-
   try {
-    const res = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/turnos");
+    const res = await fetch(`${backendURL}/turnos`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const turnos = await res.json();
 
-    if (!Array.isArray(turnos)) throw new Error("Respuesta no válida del servidor");
+    tabla.innerHTML = ""; // Limpiar tabla antes de insertar
 
-    if (turnos.length === 0) {
-      tabla.innerHTML = "<tr><td colspan='7'>No hay turnos registrados.</td></tr>";
-      return;
-    }
-
-    tabla.innerHTML = "";
-
-    turnos.forEach(turno => {
+    for (let turno of turnos.resultados || turnos) { 
+      // dependiendo si la respuesta viene con "resultados" o es array directo
       const fila = document.createElement("tr");
-
       fila.innerHTML = `
-        <td>${safe(turno.numero)}</td>
-        <td>${safe(turno.estado)}</td>
+        <td>${turno.numero}</td>
+        <td>${turno.nombre}</td>
+        <td>${turno.telefono}</td>
+        <td>${turno.etapa || "Pendiente"}</td>
         <td>
-          <select>
-            <option ${turno.estado === 'Visitando Apartamentos Modelo' ? 'selected' : ''}>Visitando Apartamentos Modelo</option>
-            <option ${turno.estado === 'Precalificando con el Banco' ? 'selected' : ''}>Precalificando con el Banco</option>
-            <option ${turno.estado === 'En proceso' ? 'selected' : ''}>En proceso</option>
-            <option ${turno.estado === 'Finalizado' ? 'selected' : ''}>Finalizado</option>
+          <select class="nuevo-estado">
+            <option${turno.etapa === "Pendiente" ? " selected" : ""}>Pendiente</option>
+            <option${turno.etapa === "En Proceso" ? " selected" : ""}>En Proceso</option>
+            <option${turno.etapa === "Asistido" ? " selected" : ""}>Asistido</option>
+            <option${turno.etapa === "Finalizado" ? " selected" : ""}>Finalizado</option>
           </select>
         </td>
-        <td><button onclick="cambiarEtapa('${safe(turno.numero)}', this)">Cambiar</button></td>
-        <td>${turno.whatsapp ? safe(turno.whatsapp) : 'No registrado'}</td>
         <td>
-          <button onclick="enviarWhatsAppManual('${safe(turno.whatsapp)}', '${safe(turno.numero)}', this)" 
-                  ${!turno.whatsapp ? 'disabled' : ''}>
-            Enviar WhatsApp
-          </button>
+          <button class="btn-estado">Actualizar</button>
+          <button class="btn-whatsapp">WhatsApp</button>
         </td>
         <td class="resultado"></td>
       `;
-
       tabla.appendChild(fila);
-    });
-
+    }
   } catch (error) {
-    console.error("Error al obtener turnos:", error);
-    tabla.innerHTML = `<tr><td colspan='7' class='error'>❌ Error al cargar turnos: ${error.message}</td></tr>`;
+    tabla.innerHTML = `<tr><td colspan="7">❌ Error cargando turnos: ${error.message}</td></tr>`;
   }
-}
+});
 
-async function cambiarEtapa(numero, boton) {
-  const fila = boton.closest("tr");
-  const nuevaEtapa = fila.querySelector("select").value;
-  const resultado = fila.querySelector(".resultado");
+document.addEventListener("click", async (e) => {
+  if (e.target.classList.contains("btn-estado")) {
+    const fila = e.target.closest("tr");
+    const numero = fila.cells[0].textContent;
+    const nuevoEstado = fila.querySelector(".nuevo-estado").value;
+    const resultado = fila.querySelector(".resultado");
 
-  boton.disabled = true;
-  resultado.textContent = "⏳ Cambiando etapa...";
-
-  try {
-    const res = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/cambiar-etapa", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ numero, nuevaEtapa })
-    });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      resultado.textContent = "✅ Etapa actualizada correctamente";
-      resultado.className = "resultado success";
-    } else {
-      resultado.textContent = `❌ Error: ${data.error || 'No se pudo actualizar'}`;
-      resultado.className = "resultado error";
+    resultado.textContent = "⏳ Actualizando...";
+    try {
+      const res = await fetch(`${backendURL}/cambiar-etapa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numero, nuevaEtapa: nuevoEstado })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error desconocido");
+      fila.cells[3].textContent = nuevoEstado; // Actualizar estado visible
+      resultado.textContent = "✅ Actualizado";
+    } catch (error) {
+      resultado.textContent = `❌ ${error.message}`;
     }
-
-  } catch (err) {
-    console.error("Error en cambiarEtapa:", err);
-    resultado.textContent = "❌ Error de red al cambiar etapa";
-    resultado.className = "resultado error";
   }
 
-  boton.disabled = false;
-}
+  if (e.target.classList.contains("btn-whatsapp")) {
+    const fila = e.target.closest("tr");
+    const telefono = fila.cells[2].textContent;
+    const resultado = fila.querySelector(".resultado");
+    resultado.textContent = "⏳ Enviando WhatsApp...";
 
-async function enviarWhatsAppManual(telefono, turno, boton) {
-  const fila = boton.closest("tr");
-  const resultado = fila.querySelector(".resultado");
+    const mensaje = "¡Hola! Es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó. Gracias por preferirnos.";
 
-  if (!telefono || !turno || !esTelefonoValido(telefono)) {
-    resultado.textContent = "❌ Número de teléfono inválido";
-    resultado.className = "resultado error";
-    return;
-  }
-
-  boton.disabled = true;
-  resultado.textContent = "⏳ Enviando mensaje...";
-
-  try {
-    const res = await fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/enviar-whatsapp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        numeroTelefono: telefono,
-        mensaje: `¡Hola! Es tu turno (${turno}). Por favor acércate a nuestro Oficial de Ventas Bisonó.`
-      })
-    });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      resultado.textContent = "✅ WhatsApp enviado correctamente";
-      resultado.className = "resultado success";
-    } else {
-      resultado.textContent = `❌ Error: ${data.error || 'No se pudo enviar'}`;
-      resultado.className = "resultado error";
+    try {
+      const res = await fetch(`${backendURL}/enviar-turno`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telefono, mensaje })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error desconocido");
+      resultado.textContent = "✅ WhatsApp enviado";
+    } catch (error) {
+      resultado.textContent = `❌ ${error.message}`;
     }
-
-  } catch (err) {
-    console.error("Error al enviar WhatsApp:", err);
-    resultado.textContent = "❌ Error de red al enviar WhatsApp";
-    resultado.className = "resultado error";
   }
-
-  boton.disabled = false;
-}
+  document.getElementById("btn-refrescar").addEventListener("click", () => {
+  obtenerTurnos();
+});
+});
