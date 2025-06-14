@@ -90,15 +90,22 @@ app.post("/cambiar-etapa", async (req, res) => {
 // Agregar un nuevo turno (recomendado)
 app.post("/turnos", async (req, res) => {
   try {
-    const { numero, telefono } = req.body;
-    if (!numero || !telefono) return res.status(400).json({ error: "Faltan datos" });
+    const { telefono } = req.body;
+    if (!telefono) return res.status(400).json({ error: "Falta el número de teléfono" });
 
-    // Validar que no exista el turno con mismo número
-    const existe = await Turno.findOne({ numero });
-    if (existe) return res.status(409).json({ error: "Turno ya existe" });
+    // Buscar último turno generado
+    const ultimoTurno = await Turno.findOne().sort({ createdAt: -1 });
 
-    const nuevoTurno = new Turno({ numero, telefono });
+    let nuevoNumero = "T-0001";
+    if (ultimoTurno) {
+      const ultimoNumero = parseInt(ultimoTurno.numero.replace("T-", ""), 10);
+      const siguienteNumero = (ultimoNumero + 1).toString().padStart(4, "0");
+      nuevoNumero = `T-${siguienteNumero}`;
+    }
+
+    const nuevoTurno = new Turno({ numero: nuevoNumero, telefono });
     await nuevoTurno.save();
+
     res.status(201).json(nuevoTurno);
   } catch (err) {
     console.error(err);
@@ -149,18 +156,6 @@ async function enviarWhatsApp(telefono) {
     throw error;
   }
 }
-const { enviarWhatsApp } = require("./gupshup");
-
-app.post("/cambiar-etapa", async (req, res) => {
-  // ...
-  try {
-    await enviarWhatsApp(siguiente.telefono, "¡Hola! es tu turno...");
-    // ...
-  } catch (err) {
-    // manejo de error
-  }
-  // ...
-});
 
 // --- Inicio del servidor ---
 const PORT = process.env.PORT || 10000;
