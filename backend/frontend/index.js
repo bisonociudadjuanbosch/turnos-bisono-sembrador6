@@ -133,29 +133,45 @@ app.post("/subir-imagen", async (req, res) => {
   }
 });
 
-// Función para enviar WhatsApp usando 360dialog
-async function enviarWhatsApp(telefono) {
-  if (!telefono) throw new Error("Teléfono vacío");
-  const telFormateado = telefono.replace(/\D/g, "");
-  const token = process.env.WHATSAPP_API_KEY;
-  if (!token) throw new Error("Falta WHATSAPP_API_KEY en .env");
+const multer = require("multer");
+const upload = multer({ dest: "tickets/" });
+
+app.post("/enviar-imagen-whatsapp", upload.single("imagen"), async (req, res) => {
+  const { nombre, telefono } = req.body;
+  const filePath = req.file.path;
 
   try {
-    await axios.post("https://api.360dialog.io/v1/messages", {
-      to: `+${telFormateado}`,
-      type: "text",
-      text: { body: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó." }
-    }, {
+    const imageBuffer = fs.readFileSync(filePath);
+    const base64Image = imageBuffer.toString("base64");
+
+    const params = new URLSearchParams({
+      channel: "whatsapp",
+      source: "18096690177",
+      destination: telefono,
+      "src.name": "ConstructoraBisono",
+      message: JSON.stringify({
+        type: "image",
+        originalUrl: `data:image/jpeg;base64,${base64Image}`,
+        previewUrl: `data:image/jpeg;base64,${base64Image}`,
+        caption: `Hola ${nombre}, aquí está tu turno generado. Te esperamos en Constructora Bisonó.`
+      })
+    });
+
+    const response = await axios.post("https://api.gupshup.io/wa/api/v1/msg", params, {
       headers: {
-        "Content-Type": "application/json",
-        "D360-API-KEY": token
+        "Content-Type": "application/x-www-form-urlencoded",
+        "apikey": "mqlyqhzffbgosadyap1vz6qpt8qzltku"
       }
     });
+
+    res.json({ status: "ok", gupshup: response.data });
   } catch (error) {
-    console.error("Error en enviarWhatsApp:", error.response?.data || error.message);
-    throw error;
+    console.error("Error al enviar imagen:", error.response?.data || error.message);
+    res.status(500).json({ error: "No se pudo enviar la imagen por WhatsApp" });
+  } finally {
+    fs.unlink(filePath, () => {});
   }
-}
+});
 
 // --- Inicio del servidor ---
 const PORT = process.env.PORT || 10000;
