@@ -1,73 +1,95 @@
-// Función para generar turno y obtener número desde backend
-function generarTurno() {
+const backendURL = window.location.origin;
+
+async function generarTurno() {
   const nombre = document.getElementById("nombre").value.trim();
   const telefono = document.getElementById("telefono").value.trim();
 
   if (!nombre || !telefono) {
-    alert("Por favor completa todos los campos.");
+    alert("Por favor completa ambos campos.");
     return;
   }
 
-  fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/turnos", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ telefono, nombre }),
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      const numero = data.numero;
-      if (!numero) throw new Error("No se recibió número de turno");
-
-      // Mostrar datos en el ticket
-      document.getElementById("numero-turno").innerText = numero;
-      document.getElementById("fecha-hora").innerText = new Date().toLocaleString();
-      document.getElementById("nombre-mostrado").innerText = nombre;
-      document.getElementById("telefono-mostrado").innerText = telefono;
-
-      // Hacer visible el ticket
-      document.getElementById("ticket").style.display = "block";
-
-      // Capturar imagen y subir
-      subirImagen();
-    })
-    .catch((err) => {
-      console.error(err);
-      alert("Error al generar turno. Intente de nuevo.");
-    });
-}
-
-// Función para capturar ticket como imagen y enviarla al backend
-function subirImagen() {
-  const ticket = document.getElementById("ticket");
-  html2canvas(ticket).then((canvas) => {
-    const base64image = canvas.toDataURL("image/jpeg", 0.9);
-
-    fetch("https://turnos-bisono-sembrador6-v2n2.onrender.com/subir-imagen", {
+  try {
+    const res = await fetch(`${backendURL}/turnos`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imagen: base64image }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.url) {
-          alert("Turno generado y ticket guardado correctamente.");
-          // Opcional: mostrar enlace o la imagen guardada
-          console.log("URL ticket guardado:", data.url);
-        } else {
-          alert("Turno generado pero hubo un problema guardando el ticket.");
-        }
-      })
-      .catch((err) => {
-        console.error(err);
-        alert("Error al subir imagen del ticket.");
-      });
-  });
+      body: JSON.stringify({ nombre, telefono }),
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+      alert("Error: " + data.error);
+      return;
+    }
+
+    actualizarTicket(data, nombre, telefono);
+    actualizarEnEspera();
+  } catch (err) {
+    alert("Error al crear turno");
+    console.error(err);
+  }
 }
 
-// Función para ocultar el ticket al cargar la página
-window.onload = () => {
-  const ticket = document.getElementById("ticket");
-  if (ticket) {
-    ticket.style.display = "none";
+function actualizarTicket(turnoData, nombre, telefono) {
+  document.getElementById("numero-turno").textContent = turnoData.numero;
+  document.getElementById("fecha-hora").textContent = new Date().toLocaleString("es-DO");
+  document.getElementById("nombre-mostrado").textContent = nombre;
+  document.getElementById("telefono-mostrado").textContent = telefono;
+}
+
+async function actualizarEnEspera() {
+  try {
+    const res = await fetch(`${backendURL}/turnos`);
+    const turnos = await res.json();
+
+    // Contar cuantos están en etapa "Pendiente"
+    const pendientes = turnos.filter(t => t.etapa === "Pendiente").length;
+    document.getElementById("en-espera").textContent = pendientes;
+  } catch {
+    document.getElementById("en-espera").textContent = "?";
   }
-};
+}
+
+async function descargar() {
+  const ticket = document.getElementById("ticket");
+
+  // Usar html2canvas para convertir el div a imagen
+  const canvas = await html2canvas(ticket, { scale: 2 });
+
+  const link = document.createElement("a");
+  link.download = "turno-bisono.jpg";
+  link.href = canvas.toDataURL("image/jpeg", 1);
+  link.click();
+}
+
+async function compartirWhatsApp() {
+  const ticket = document.getElementById("ticket");
+
+  try {
+    const canvas = await html2canvas(ticket, { scale: 2 });
+    const imageBase64 = canvas.toDataURL("image/jpeg", 1);
+
+    const res = await fetch(`${backendURL}/subir-imagen`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imagen: imageBase64 }),
+    });
+
+    const data = await res.json();
+    if (!data.url) {
+      alert("Error al subir la imagen");
+      return;
+    }
+
+    const mensaje = encodeURIComponent(`¡Hola! Aquí está tu turno: ${data.url}`);
+    const whatsappURL = `https://api.whatsapp.com/send?text=${mensaje}`;
+    window.open(whatsappURL, "_blank");
+  } catch (err) {
+    alert("Error al compartir por WhatsApp");
+    console.error(err);
+  }
+}
+
+// Actualizar la cantidad en espera al cargar la página
+window.onload = actualizarEnEspera;
