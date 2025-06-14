@@ -1,4 +1,4 @@
-// server.js actualizado para Constructora Bisonó con toda la lógica completa
+// server.js para Constructora Bisonó con WhatsApp Gupshup y Turnos
 require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
@@ -12,29 +12,41 @@ const Turno = require("./models/turno");
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Carpetas
+// Verificación de variables de entorno
+if (!process.env.GUPSHUP_APIKEY || !process.env.WABA_PHONE || !process.env.APP_NAME) {
+  console.warn("⚠️ Faltan variables en .env: GUPSHUP_APIKEY, WABA_PHONE o APP_NAME");
+}
+
+// === UTILS ===
+function normalizarTelefono(telefono) {
+  return telefono.replace(/\D/g, ''); // elimina todo lo que no sea número
+}
+
+// === RUTAS DE ARCHIVOS ===
 const PUBLIC_DIR = path.join(__dirname, "public");
 const IMAGES_DIR = path.join(PUBLIC_DIR, "turnos");
 if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
 
-// Middleware
+// === MIDDLEWARE ===
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static(PUBLIC_DIR));
 app.use("/turnos", express.static(IMAGES_DIR));
 
-// Conexión a MongoDB Atlas
+// === CONEXIÓN A MONGO ===
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-  .then(() => console.log("✅ Conectado a MongoDB Atlas"))
-  .catch(err => console.error("❌ Error conectando MongoDB:", err.message));
+.then(() => console.log("✅ Conectado a MongoDB Atlas"))
+.catch(err => console.error("❌ Error conectando MongoDB:", err.message));
+
+// === RUTAS ===
 
 // Ruta de salud
 app.get("/health", (req, res) => res.send("🟢 API viva"));
 
-// Ruta principal
+// Ruta raíz
 app.get("/", (req, res) => {
   res.send("🟢 API de Turnos Bisonó funcionando. Usa /turnos para obtener los turnos.");
 });
@@ -46,7 +58,7 @@ app.post("/turnos", async (req, res) => {
     if (!numero || !nombre || !telefono || !fechaHora) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
-    const nuevo = await Turno.create({ numero, nombre, telefono, fechaHora });
+    const nuevo = await Turno.create({ numero, nombre, telefono: normalizarTelefono(telefono), fechaHora });
     res.json(nuevo);
   } catch (err) {
     console.error("❌ Error creando turno:", err.message);
@@ -65,7 +77,7 @@ app.get("/turnos", async (req, res) => {
   }
 });
 
-// Cambiar etapa del turno y notificar siguiente pendiente
+// Cambiar etapa del turno y notificar al siguiente
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
   if (!numero || !nuevaEtapa) return res.status(400).json({ error: "Datos incompletos" });
@@ -79,9 +91,10 @@ app.post("/cambiar-etapa", async (req, res) => {
 
     if (!actualizado) return res.status(404).json({ error: "Turno no encontrado" });
 
-    // Notificar al siguiente turno pendiente
     const siguiente = await Turno.findOne({ etapa: "Pendiente" }).sort({ _id: 1 });
+
     if (siguiente) {
+      const numeroDestino = normalizarTelefono(siguiente.telefono);
       await axios.post("https://api.gupshup.io/sm/api/v1/msg", null, {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -90,10 +103,10 @@ app.post("/cambiar-etapa", async (req, res) => {
         params: {
           channel: "whatsapp",
           source: process.env.WABA_PHONE,
-          destination: siguiente.telefono,
+          destination: numeroDestino,
           message: JSON.stringify({
             type: "text",
-            text: "¡Hola! es turno, por favor pasa con nuestro Oficial de Ventas Bisono. Gracias por preferirnos. Constructora Bisono."
+            text: "¡Hola! Es tu turno, por favor pasa con nuestro Oficial de Ventas Bisonó. Gracias por preferirnos."
           }),
           "src.name": process.env.APP_NAME
         }
@@ -107,7 +120,7 @@ app.post("/cambiar-etapa", async (req, res) => {
   }
 });
 
-// Subir imagen base64 del turno
+// Subir imagen base64 del ticket
 app.post("/upload-turno", async (req, res) => {
   const { image } = req.body;
   if (!image || !image.startsWith("data:image/")) {
@@ -129,21 +142,22 @@ app.post("/upload-turno", async (req, res) => {
   }
 });
 
-// Enviar mensaje por WhatsApp manualmente
+// Enviar mensaje de WhatsApp manual
 app.post("/enviar-whatsapp", async (req, res) => {
   const { numeroTelefono, mensaje } = req.body;
   if (!numeroTelefono || !mensaje) return res.status(400).json({ error: "Datos incompletos" });
 
   try {
+    const destino = normalizarTelefono(numeroTelefono);
     const response = await axios.post("https://api.gupshup.io/sm/api/v1/msg", null, {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        apikey: process.env.GUPSHUP_APIKEY
+        apikey: process.env.GUPSHUP_APIKEY,
       },
       params: {
         channel: "whatsapp",
         source: process.env.WABA_PHONE,
-        destination: numeroTelefono,
+        destination: destino,
         message: JSON.stringify({ type: "text", text: mensaje }),
         "src.name": process.env.APP_NAME
       }
