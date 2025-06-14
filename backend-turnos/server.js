@@ -5,11 +5,11 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const Turno = require("./models/Turno");
 const axios = require("axios");
+const Turno = require("./models/turno"); // Asegúrate de tener el modelo definido correctamente
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // 📂 Directorios
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -30,33 +30,30 @@ mongoose.connect(process.env.MONGO_URI || "mongodb://localhost/turnos", {
 .then(() => console.log("✅ Conectado a MongoDB"))
 .catch(err => console.error("❌ Error al conectar a MongoDB:", err.message));
 
-// Health check rápido
-app.get("/health", (req, res) => res.status(200).send("OK"));
+// 🩺 Health check
+app.get("/health", (req, res) => res.send("🟢 API de Turnos Bisonó OK"));
 
-// Ruta principal
-app.get("/", (req, res) =>
-  res.sendFile(path.join(PUBLIC_DIR, "index.html"))
-);
-
-// 📄 Modelo de Turno
-const Turno = mongoose.model("Turno", new mongoose.Schema({
-  numero: { type: String, required: true },
-  nombre: { type: String, required: true },
-  telefono: { type: String, required: true },
-  fechaHora: { type: String, required: true },
-  etapa: { type: String, default: "Pendiente" }
-}));
+// 🏠 Ruta raíz
+app.get("/", (req, res) => {
+  res.send("🟢 API de Turnos Bisonó funcionando. Usa /turnos para obtener turnos.");
+});
 
 // 📌 Crear nuevo turno
 app.post("/turnos", async (req, res) => {
   try {
     const { numero, nombre, telefono, fechaHora } = req.body;
-
     if (!numero || !nombre || !telefono || !fechaHora) {
       return res.status(400).json({ error: "Todos los campos son obligatorios" });
     }
 
-    const nuevo = await Turno.create({ numero, nombre, telefono, fechaHora });
+    const nuevo = await Turno.create({
+      numero,
+      nombre,
+      telefono,
+      fechaHora,
+      etapa: "Pendiente"
+    });
+
     res.json(nuevo);
   } catch (err) {
     console.error("❌ Error al registrar turno:", err.message);
@@ -75,7 +72,7 @@ app.get("/turnos", async (req, res) => {
   }
 });
 
-// 🔄 Cambiar etapa del turno y notificar al siguiente
+// 🔄 Cambiar etapa y notificar al siguiente turno pendiente
 app.post("/cambiar-etapa", async (req, res) => {
   const { numero, nuevaEtapa } = req.body;
 
@@ -100,17 +97,17 @@ app.post("/cambiar-etapa", async (req, res) => {
       await axios.post("https://api.gupshup.io/sm/api/v1/msg", null, {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          apikey: process.env.GUPSHUP_APIKEY,
+          apikey: process.env.GUPSHUP_APIKEY || "sk_33ed3140aca24e4c98cd75b52b5c7722",
         },
         params: {
           channel: "whatsapp",
-          source: process.env.GUPSHUP_SOURCE,
+          source: process.env.GUPSHUP_SOURCE || "18096690177",
           destination: siguiente.telefono,
           message: JSON.stringify({
             type: "text",
-            text: "¡Hola! es tu turno, por favor acércate a nuestro Oficial de Ventas Bisonó."
+            text: "¡Hola! es tu Turno, por favor acercate a nuestro Oficial de Ventas Bisonó."
           }),
-          "src.name": process.env.GUPSHUP_SRC_NAME,
+          "src.name": process.env.GUPSHUP_SRC_NAME || "ConstructoraBisono",
         }
       });
     }
@@ -122,17 +119,18 @@ app.post("/cambiar-etapa", async (req, res) => {
   }
 });
 
-// 🖼️ Subir imagen de turno
+// 🖼️ Subir imagen del ticket
 app.post("/upload-turno", async (req, res) => {
   const { image } = req.body;
 
-  if (!image || !image.startsWith("data:image/jpeg;base64,")) {
+  if (!image || !image.startsWith("data:image/")) {
     return res.status(400).json({ error: "Imagen no válida" });
   }
 
   try {
-    const base64Data = image.replace(/^data:image\/jpeg;base64,/, "");
-    const filename = `turno-${crypto.randomUUID()}.jpg`;
+    const extension = image.split(";")[0].split("/")[1];
+    const base64Data = image.split(";base64,").pop();
+    const filename = `turno-${crypto.randomUUID()}.${extension}`;
     const filePath = path.join(CARPETA_IMAGENES, filename);
 
     fs.writeFileSync(filePath, base64Data, "base64");
@@ -145,26 +143,26 @@ app.post("/upload-turno", async (req, res) => {
   }
 });
 
-// 📲 Enviar WhatsApp directamente
+// 📲 Enviar mensaje directo por WhatsApp
 app.post("/enviar-whatsapp", async (req, res) => {
   const { numeroTelefono, mensaje } = req.body;
 
   if (!numeroTelefono || !mensaje) {
-    return res.status(400).json({ error: "Datos incompletos" });
+    return res.status(400).json({ error: "Faltan datos para enviar el mensaje" });
   }
 
   try {
     const response = await axios.post("https://api.gupshup.io/sm/api/v1/msg", null, {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        apikey: process.env.GUPSHUP_APIKEY,
+        apikey: process.env.GUPSHUP_APIKEY || "sk_33ed3140aca24e4c98cd75b52b5c7722",
       },
       params: {
         channel: "whatsapp",
-        source: process.env.GUPSHUP_SOURCE,
+        source: process.env.GUPSHUP_SOURCE || "18096690177",
         destination: numeroTelefono,
         message: JSON.stringify({ type: "text", text: mensaje }),
-        "src.name": process.env.GUPSHUP_SRC_NAME,
+        "src.name": process.env.GUPSHUP_SRC_NAME || "ConstructoraBisono",
       }
     });
 
@@ -173,11 +171,6 @@ app.post("/enviar-whatsapp", async (req, res) => {
     console.error("❌ Error enviando WhatsApp:", err.response?.data || err.message);
     res.status(500).json({ error: "Error enviando mensaje" });
   }
-});
-
-// 🧪 Ruta de prueba
-app.get("/", (req, res) => {
-  res.send("🟢 API de Turnos Bisonó funcionando. Usa /turnos para obtener turnos.");
 });
 
 // 🚀 Iniciar servidor
