@@ -4,112 +4,114 @@ const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+const mongoose = require("mongoose");
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Carpeta donde se guardan las imágenes
+// Conexión a MongoDB
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/turnos-bisono";
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => console.log("🗄️ Conectado a MongoDB"))
+  .catch(err => console.error("❌ Error MongoDB:", err));
+
+// Esquema y modelo de turno
+const turnoSchema = new mongoose.Schema({
+  numero: { type: String, required: true, unique: true },
+  telefono: { type: String, required: true },
+  etapa: { type: String, default: "Pendiente" },
+  creadoEn: { type: Date, default: Date.now }
+});
+
+const Turno = mongoose.model("Turno", turnoSchema);
+
+// Carpeta para imágenes
 const TURNOS_FOLDER = path.join(__dirname, "turnos");
 if (!fs.existsSync(TURNOS_FOLDER)) {
   fs.mkdirSync(TURNOS_FOLDER, { recursive: true });
 }
 
-// Base de datos en memoria (para pruebas)
-let turnos = [];
+// Rutas
 
-/**
- * GET /turnos - Lista todos los turnos
- */
-app.get("/turnos", (req, res) => res.json(turnos));
-
-/**
- * POST /agregar-turno - Crea un nuevo turno
- */
-app.post("/agregar-turno", (req, res) => {
-  const { numero, telefono, etapa = "Pendiente" } = req.body;
-
-  if (!numero || !telefono) {
-    return res.status(400).json({ error: "Faltan campos obligatorios" });
+// GET /turnos - Listar todos ordenados por fecha creación ascendente
+app.get("/turnos", async (req, res) => {
+  try {
+    const turnos = await Turno.find().sort({ creadoEn: 1 }).exec();
+    res.json(turnos);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener turnos" });
   }
-
-  if (turnos.find(t => t.numero === numero)) {
-    return res.status(409).json({ error: "Turno ya existe" });
-  }
-
-  turnos.push({ numero, telefono, etapa });
-  res.json({ success: true, turno: { numero, telefono, etapa } });
 });
 
-/**
- * POST /cambiar-etapa - Cambia el estado del turno y avisa al siguiente
- */
+// POST /agregar-turno - Crear nuevo turno
+app.post("/agregar-turno", async (req, res) => {
+  try {
+    const { numero, telefono, etapa = "Pendiente" } = req.body;
+
+    if (!numero || !telefono) {
+      return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    // Validar que no exista ya el turno
+    const existe = await Turno.findOne({ numero }).exec();
+    if (existe) {
+      return res.status(409).json({ error: "Turno ya existe" });
+    }
+
+    const nuevoTurno = new Turno({ numero, telefono, etapa });
+    await nuevoTurno.save();
+
+    res.json({ success: true, turno: nuevoTurno });
+  } catch (error) {
+    console.error("❌ Error agregando turno:", error);
+    res.status(500).json({ error: "Error al crear turno" });
+  }
+});
+
+// POST /cambiar-etapa - Cambiar estado de un turno y avisar al siguiente
 app.post("/cambiar-etapa", async (req, res) => {
-  const { numero, nuevaEtapa } = req.body;
-  const idx = turnos.findIndex(t => t.numero === numero);
-  if (idx < 0) return res.status(404).json({ error: "Turno no encontrado" });
-
-  turnos[idx].etapa = nuevaEtapa;
-  console.log(`✅ Turno ${numero} → ${nuevaEtapa}`);
-
-  // Buscar el siguiente en espera
-  const siguiente = turnos.find((t, i) => i > idx && t.etapa === "Pendiente");
-
-  if (siguiente) {
-    try {
-      await enviarWhatsApp(siguiente.telefono);
-      console.log(`📲 WhatsApp enviado a ${siguiente.telefono}`);
-    } catch (e) {
-      console.error("❌ Error enviando WhatsApp:", e.response?.data || e.message);
+  try {
+    const { numero, nuevaEtapa } = req.body;
+    if (!numero || !nuevaEtapa) {
+      return res.status(400).json({ error: "Faltan campos 'numero' o 'nuevaEtapa'" });
     }
-  }
 
-  res.json({ success: true });
+    const turno = await Turno.findOne({ numero }).exec();
+    if (!turno) {
+      return res.status(404).json({ error: "Turno no encontrado" });
+    }
+
+    turno.etapa = nuevaEtapa;
+    await turno.save();
+
+    console.log(`✅ Turno ${numero} cambiado a ${nuevaEtapa}`);
+
+    // Buscar siguiente turno pendiente más antiguo (creadoEn asc)
+    const siguiente = await Turno.findOne({ etapa: "Pendiente", numero: { $ne: numero } })
+      .sort({ creadoEn: 1 })
+      .exec();
+
+    if (siguiente) {
+      try {
+        await enviarWhatsApp(siguiente.telefono);
+        console.log(`📲 WhatsApp enviado a ${siguiente.telefono}`);
+      } catch (e) {
+        console.error("❌ Error enviando WhatsApp:", e.response?.data || e.message);
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ Error cambiando etapa:", error);
+    res.status(500).json({ error: "Error al cambiar etapa" });
+  }
 });
 
-/**
- * Enviar mensaje de WhatsApp (con imagen opcional)
- */
-async function enviarWhatsApp(telefono, imageUrl = null) {
-  const token = process.env.GUPSHUP_API_KEY;
-  const from = process.env.GUPSHUP_SOURCE_NUMBER || "18096690177";
-  const appName = process.env.GUPSHUP_APP_NAME || "ConstructoraBisono";
-
-  let messagePayload;
-
-  if (imageUrl) {
-    messagePayload = {
-      type: "image",
-      originalUrl: imageUrl,
-      previewUrl: imageUrl,
-      caption: "Aquí tienes tu turno en Constructora Bisonó"
-    };
-  } else {
-    messagePayload = {
-      type: "text",
-      text: "¡Hola! Es tu turno. Acércate a nuestro Oficial de Ventas Bisonó."
-    };
-  }
-
-  const payload = new URLSearchParams();
-  payload.append("channel", "whatsapp");
-  payload.append("source", from);
-  payload.append("destination", telefono);
-  payload.append("message", JSON.stringify(messagePayload));
-  payload.append("src.name", appName);
-
-  await axios.post("https://api.gupshup.io/sm/api/v1/msg", payload, {
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "apikey": token
-    }
-  });
-}
-
-/**
- * POST /subir-imagen - Guarda imagen base64 y devuelve URL
- */
+// POST /subir-imagen - Igual que antes
 app.post("/subir-imagen", (req, res) => {
   const { imagen } = req.body;
 
@@ -133,9 +135,7 @@ app.post("/subir-imagen", (req, res) => {
   });
 });
 
-/**
- * POST /enviar-turno - Subir imagen base64 y enviar por WhatsApp
- */
+// POST /enviar-turno - Guardar imagen y enviar WhatsApp
 app.post("/enviar-turno", (req, res) => {
   const { telefono, imagen } = req.body;
 
@@ -165,13 +165,54 @@ app.post("/enviar-turno", (req, res) => {
   });
 });
 
-/**
- * Servir imágenes desde /turnos
- */
+// Servir imágenes desde /turnos
 app.use("/turnos", express.static(TURNOS_FOLDER));
+
+// Enviar WhatsApp (igual que antes)
+async function enviarWhatsApp(telefono, imageUrl = null) {
+  const token = process.env.GUPSHUP_API_KEY;
+  if (!token) throw new Error("Falta API key de Gupshup");
+
+  const from = process.env.GUPSHUP_SOURCE_NUMBER || "18096690177";
+  const appName = process.env.GUPSHUP_APP_NAME || "ConstructoraBisono";
+
+  let telLimpio = telefono.replace(/\D/g, "");
+  if (!telLimpio.startsWith("1")) {
+    telLimpio = "1" + telLimpio;
+  }
+
+  let messagePayload;
+  if (imageUrl) {
+    messagePayload = {
+      type: "image",
+      originalUrl: imageUrl,
+      previewUrl: imageUrl,
+      caption: "Aquí tienes tu turno en Constructora Bisonó"
+    };
+  } else {
+    messagePayload = {
+      type: "text",
+      text: "¡Hola! Es tu turno. Acércate a nuestro Oficial de Ventas Bisonó."
+    };
+  }
+
+  const payload = new URLSearchParams();
+  payload.append("channel", "whatsapp");
+  payload.append("source", from);
+  payload.append("destination", telLimpio);
+  payload.append("message", JSON.stringify(messagePayload));
+  payload.append("src.name", appName);
+
+  await axios.post("https://api.gupshup.io/sm/api/v1/msg", payload, {
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      apikey: token
+    }
+  });
+}
 
 // Iniciar servidor
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`)
-);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+});
