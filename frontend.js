@@ -4,50 +4,51 @@ async function generarTurno() {
   const nombre = document.getElementById("nombre").value.trim();
   const telefono = document.getElementById("telefono").value.trim();
 
-  if (!nombre || !telefono) {
-    alert("Por favor completa ambos campos.");
+  if (!telefono) {
+    alert("Por favor ingresa tu número de WhatsApp.");
     return;
   }
 
   try {
-    const res = await fetch(`${backendURL}/turnos`, {
+    const res = await fetch("https://tu-backend-url.onrender.com/turnos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nombre, telefono }),
     });
 
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+
     const data = await res.json();
 
-    if (data.error) {
-      alert("Error: " + data.error);
-      return;
-    }
+    document.getElementById("numero-turno").textContent = data.numero;
+    document.getElementById("nombre-mostrado").textContent = data.nombre || "";
+    document.getElementById("telefono-mostrado").textContent = data.telefono;
 
-    actualizarTicket(data, nombre, telefono);
-    actualizarEnEspera();
-  } catch (err) {
-    alert("Error al crear turno");
-    console.error(err);
+    // Fecha y hora actual
+    const ahora = new Date();
+    document.getElementById("fecha-hora").textContent = ahora.toLocaleString();
+
+    alert("Turno generado: " + data.numero);
+
+    // Actualizar personas en espera
+    await actualizarEnEspera();
+
+  } catch (error) {
+    console.error("Error al generar turno:", error);
+    alert("Error al generar turno. Intente de nuevo.");
   }
-}
-
-function actualizarTicket(turnoData, nombre, telefono) {
-  document.getElementById("numero-turno").textContent = turnoData.numero;
-  document.getElementById("fecha-hora").textContent = new Date().toLocaleString("es-DO");
-  document.getElementById("nombre-mostrado").textContent = nombre;
-  document.getElementById("telefono-mostrado").textContent = telefono;
 }
 
 async function actualizarEnEspera() {
   try {
-    const res = await fetch(`${backendURL}/turnos`);
+    const res = await fetch("https://tu-backend-url.onrender.com/turnos");
+    if (!res.ok) throw new Error("No se pudo obtener lista de turnos");
     const turnos = await res.json();
-
-    // Contar cuantos están en etapa "Pendiente"
+    // Solo contar los que estén en etapa Pendiente
     const pendientes = turnos.filter(t => t.etapa === "Pendiente").length;
     document.getElementById("en-espera").textContent = pendientes;
-  } catch {
-    document.getElementById("en-espera").textContent = "?";
+  } catch (error) {
+    console.error("Error al actualizar en espera:", error);
   }
 }
 
