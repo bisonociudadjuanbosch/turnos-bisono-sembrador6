@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Panel Administración - Turnos Constructora Bisonó</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background-color: #004080; color: white; }
+    select, button { padding: 5px; }
+    #statusMsg { margin-top: 10px; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<h1>Panel de Administración - Turnos</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Número Turno</th>
+      <th>Nombre</th>
+      <th>Teléfono</th>
+      <th>Fecha y Hora</th>
+      <th>Estado</th>
+      <th>Acciones</th>
+      <th>Ticket</th>
+    </tr>
+  </thead>
+  <tbody id="tablaTurnos"></tbody>
+</table>
+
+<p id="statusMsg"></p>
+
+<script>
+  const tablaTurnos = document.getElementById('tablaTurnos');
+  const statusMsg = document.getElementById('statusMsg');
+
+  // Función para cargar turnos desde backend
+  async function cargarTurnos() {
+    try {
+      const resp = await fetch('/turnos');
+      if (!resp.ok) throw new Error('Error cargando turnos');
+      const turnos = await resp.json();
+
+      tablaTurnos.innerHTML = '';
+
+      turnos.forEach((turno, index) => {
+        // Contar personas en espera = turnos con estado Pendiente y numeroTurno > turno.numeroTurno
+        const esperando = turnos.filter(t => t.estado === 'Pendiente' && t.numeroTurno > turno.numeroTurno).length;
+
+        // Formato fecha
+        const fechaHora = new Date(turno.fecha).toLocaleString();
+
+        // Ticket info: Si hay url, mostrar enlace, si no, botón para generar ticket
+        let ticketHTML = '';
+        if (turno.ticketGenerado) {
+          ticketHTML = `<a href="${turno.ticketUrl}" target="_blank">Ver Ticket</a>`;
+        } else {
+          ticketHTML = `<button class="btnGenerarTicket" data-id="${turno.id}" data-num="${turno.numeroTurno}" data-nombre="${turno.nombre}" data-fecha="${turno.fecha}" data-esperando="${esperando}">Generar Ticket</button>`;
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${turno.numeroTurno}</td>
+          <td>${turno.nombre}</td>
+          <td>${turno.telefono}</td>
+          <td>${fechaHora}</td>
+          <td>
+            <select data-id="${turno.id}" class="estadoSelect">
+              <option value="Pendiente" ${turno.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
+              <option value="En Proceso" ${turno.estado === 'En Proceso' ? 'selected' : ''}>En Proceso</option>
+              <option value="Finalizado" ${turno.estado === 'Finalizado' ? 'selected' : ''}>Finalizado</option>
+            </select>
+          </td>
+          <td>
+            <button class="btnEnviar" data-id="${turno.id}">Enviar WhatsApp</button>
+          </td>
+          <td>${ticketHTML}</td>
+        `;
+        tablaTurnos.appendChild(tr);
+      });
+
+      // Añadir eventos para select estado
+      document.querySelectorAll('.estadoSelect').forEach(select => {
+        select.addEventListener('change', async e => {
+          const id = e.target.dataset.id;
+          const nuevoEstado = e.target.value;
+
+          try {
+            const resp = await fetch('/cambiar-etapa', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idTurno: id, nuevoEstado })
+            });
+            const data = await resp.json();
+            statusMsg.textContent = `Estado actualizado a ${nuevoEstado} para el turno ${id}`;
+            cargarTurnos();
+          } catch (err) {
+            statusMsg.textContent = 'Error al actualizar estado';
+          }
+        });
+      });
+
+      // Añadir eventos para enviar WhatsApp
+      document.querySelectorAll('.btnEnviar').forEach(btn => {
+        btn.addEventListener('click', async e => {
+          const id = e.target.dataset.id;
+          try {
+            const resp = await fetch(`/enviar-whatsapp/${id}`, { method: 'POST' });
+            const data = await resp.json();
+            statusMsg.textContent = data.message || 'Mensaje WhatsApp enviado.';
+          } catch (err) {
+            statusMsg.textContent = 'Error enviando WhatsApp';
+          }
+        });
+      });
+
+      // Añadir eventos para generar ticket
+      document.querySelectorAll('.btnGenerarTicket').forEach(btn => {
+        btn.addEventListener('click', async e => {
+          const id = btn.dataset.id;
+          const numeroTurno = btn.dataset.num;
+          const nombre = btn.dataset.nombre;
+          const fechaISO = btn.dataset.fecha;
+          const esperando = btn.dataset.esperando;
+
+          try {
+            const resp = await fetch('/generar-ticket', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id, numeroTurno, nombre, fechaISO, esperando })
+            });
+            const data = await resp.json();
+            if (data.ok) {
+              statusMsg.textContent = `Ticket generado para turno ${numeroTurno}`;
+              cargarTurnos();
+            } else {
+              statusMsg.textContent = 'Error generando ticket';
+            }
+          } catch {
+            statusMsg.textContent = 'Error generando ticket';
+          }
+        });
+      });
+
+    } catch (error) {
+      statusMsg.textContent = 'Error cargando turnos.';
+    }
+  }
+
+  cargarTurnos();
+
+  // Refrescar cada 30 segundos para actualizar estado y turnos en espera
+  setInterval(cargarTurnos, 30000);
+</script>
+
+</body>
+</html>

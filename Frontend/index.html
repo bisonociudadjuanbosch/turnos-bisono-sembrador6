@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Generar Turno - Constructora Bisonó</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    label { display: block; margin-top: 10px; }
+    input { padding: 8px; width: 250px; }
+    button { margin-top: 15px; padding: 10px 20px; cursor: pointer; }
+    #ticket { 
+      margin-top: 20px; 
+      border: 2px solid #004080; 
+      padding: 15px; 
+      width: 320px; 
+      font-family: 'Courier New', Courier, monospace; 
+      background: #f9f9f9;
+      position: relative;
+    }
+    #ticket h2 {
+      text-align: center;
+      color: #004080;
+      margin-bottom: 5px;
+    }
+    #logo {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    #logo img {
+      max-width: 150px;
+    }
+    #ticket p {
+      margin: 3px 0;
+      font-size: 14px;
+    }
+    #espera {
+      font-weight: bold;
+      color: #d9534f;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Generar Turno - Constructora Bisonó</h1>
+
+<form id="formTurno">
+  <label for="nombre">Nombre completo:</label>
+  <input type="text" id="nombre" required />
+
+  <label for="telefono">Número WhatsApp (ej: +18095551234):</label>
+  <input type="tel" id="telefono" required pattern="^\+?\d{10,15}$" />
+
+  <button type="submit">Generar Turno</button>
+</form>
+
+<div id="ticket" style="display:none;">
+  <div id="logo">
+    <img src="https://raw.githubusercontent.com/bisonociudadjuanbosch/turnos-bisono-sembrador6/main/logo-bisono.png" alt="Logo Constructora Bisonó" />
+  </div>
+  <h2>CONSTRUCTORA BISONO</h2>
+  <p><strong>Dirección:</strong> Calle Olof Palme, esquina Av. Luperón, Distrito Nacional, R.D.</p>
+  <p><strong>Teléfono:</strong> 809-548-6353</p>
+  <p><strong>Residencial:</strong> Residencial El Sembrador VI, Ciudad Juan Bosch Santo Domingo Este</p>
+  <hr />
+  <p><strong>TURNO:</strong> <span id="numeroTurno"></span></p>
+  <p><strong>Fecha y Hora:</strong> <span id="fechaHora"></span></p>
+  <p><strong>Nombre:</strong> <span id="nombreCliente"></span></p>
+  <p><strong>Teléfono:</strong> <span id="telefonoCliente"></span></p>
+  <p id="espera"></p>
+</div>
+
+<button id="btnDescargar" style="display:none;">Descargar Ticket JPG</button>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+  const form = document.getElementById('formTurno');
+  const ticketDiv = document.getElementById('ticket');
+  const btnDescargar = document.getElementById('btnDescargar');
+  const numeroTurnoSpan = document.getElementById('numeroTurno');
+  const fechaHoraSpan = document.getElementById('fechaHora');
+  const nombreClienteSpan = document.getElementById('nombreCliente');
+  const telefonoClienteSpan = document.getElementById('telefonoCliente');
+  const esperaP = document.getElementById('espera');
+
+  let turnoActual = null;
+
+  async function generarTurnoBackend(nombre, telefono) {
+    const resp = await fetch('/agregar-turno', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, telefono })
+    });
+    return resp.json();
+  }
+
+  async function subirImagenBackend(idTurno, base64image) {
+    const resp = await fetch('/subir-imagen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idTurno, base64image })
+    });
+    return resp.json();
+  }
+
+  async function actualizarTurnos() {
+    const resp = await fetch('/turnos');
+    return resp.json();
+  }
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const nombre = form.nombre.value.trim();
+    const telefono = form.telefono.value.trim();
+
+    if (!nombre || !telefono) {
+      alert('Por favor completa todos los campos.');
+      return;
+    }
+
+    // Generar turno
+    const turno = await generarTurnoBackend(nombre, telefono);
+    turnoActual = turno;
+
+    // Mostrar ticket
+    numeroTurnoSpan.textContent = turno.numeroTurno;
+    fechaHoraSpan.textContent = new Date(turno.fecha).toLocaleString();
+    nombreClienteSpan.textContent = turno.nombre;
+    telefonoClienteSpan.textContent = turno.telefono;
+
+    // Obtener cantidad de personas en espera (Pendientes)
+    const turnos = await actualizarTurnos();
+    const pendientes = turnos.filter(t => t.estado === 'Pendiente').length;
+    esperaP.textContent = `Personas en espera: ${pendientes}`;
+
+    ticketDiv.style.display = 'block';
+    btnDescargar.style.display = 'inline-block';
+  });
+
+  btnDescargar.addEventListener('click', async () => {
+    if (!turnoActual) return;
+
+    // Generar imagen con html2canvas
+    const canvas = await html2canvas(ticketDiv, { scale: 2 });
+    const base64image = canvas.toDataURL('image/jpeg', 1.0);
+
+    // Subir imagen al backend
+    const { urlImagen } = await subirImagenBackend(turnoActual.id, base64image);
+    alert('Ticket generado y guardado.');
+
+    // Descargar imagen
+    const a = document.createElement('a');
+    a.href = urlImagen;
+    a.download = `${turnoActual.numeroTurno}.jpg`;
+    a.click();
+  });
+</script>
+
+</body>
+</html>
