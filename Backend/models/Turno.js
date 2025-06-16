@@ -1,11 +1,12 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
-const TurnoSchema = new mongoose.Schema({
+const turnoSchema = new mongoose.Schema({
+  numeroTurno: Number,
   nombre: String,
   telefono: String,
-  numeroTurno: Number,
-  estado: { type: String, default: "Pendiente" },
-  fecha: { type: Date, default: Date.now }
+  fecha: { type: Date, default: Date.now },
+  estado: { type: String, default: 'Pendiente' },
+  imagenUrl: String
 });
 
-module.exports = mongoose.model("Turno", TurnoSchema);
+module.exports = mongoose.model('Turno', turnoSchema);

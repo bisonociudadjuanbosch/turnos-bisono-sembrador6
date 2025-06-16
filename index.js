@@ -1,3 +1,4 @@
+// index.js (raíz del proyecto)
 require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
@@ -7,32 +8,34 @@ const path = require("path");
 const axios = require("axios");
 const FormData = require("form-data");
 const { createCanvas } = require("canvas");
-
 const Turno = require("./models/Turno");
+const uploadTurnoRouter = require("./upload-turno");
 
 const app = express();
 
-// Ajustes para payload grande
+// 1. Parser único con límite alto (evita PayloadTooLargeError)
 app.use(cors());
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ limit: "5mb", extended: true }));
+// [IMPORTANTE] No usar otros body-parsers sin límite personalizado :contentReference[oaicite:1]{index=1}
 
-// Hacer pública la carpeta de tickets
+// 2. Servir imágenes de tickets
 const TICKETS_DIR = path.join(__dirname, "tickets");
 if (!fs.existsSync(TICKETS_DIR)) fs.mkdirSync(TICKETS_DIR);
 app.use("/tickets", express.static(TICKETS_DIR));
 
+// 3. Rutas de subida de imágenes
+app.use("/", uploadTurnoRouter);
+
 const port = process.env.PORT || 10000;
 const mongodbUri = process.env.MONGODB_URI;
 
-// 📦 Conexión a MongoDB
-mongoose.connect(mongodbUri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => console.log("✅ Conectado a MongoDB"))
+// 4. Conexión a MongoDB
+mongoose.connect(mongodbUri, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ Conectado a MongoDB"))
   .catch(err => console.error("❌ Error conexión MongoDB:", err));
 
-// 📥 POST /turnos
+// 5. Endpoint para generar turno + ticket + WhatsApp
 app.post("/turnos", async (req, res) => {
   const { nombre, telefono } = req.body;
   if (!telefono) return res.status(400).json({ error: "El teléfono es obligatorio" });
@@ -41,28 +44,18 @@ app.post("/turnos", async (req, res) => {
     const ultimoTurno = await Turno.findOne().sort({ numeroTurno: -1 });
     const nuevoNumero = ultimoTurno ? ultimoTurno.numeroTurno + 1 : 1;
 
-    const nuevoTurno = new Turno({
-      nombre,
-      telefono,
-      numeroTurno: nuevoNumero
-    });
+    const nuevoTurno = new Turno({ nombre, telefono, numeroTurno: nuevoNumero });
     await nuevoTurno.save();
 
     const enEspera = await Turno.countDocuments({ estado: { $in: ["Pendiente", "En Proceso"] } });
 
-    const filePath = await generarTicketVisual({
-      nombre,
-      numeroTurno: nuevoNumero,
-      fecha: nuevoTurno.fecha,
-      enEspera
-    });
-
+    const filePath = await generarTicketVisual({ nombre, numeroTurno: nuevoNumero, fecha: nuevoTurno.fecha, enEspera });
     await enviarImagenWhatsApp(telefono, filePath);
 
     res.json({
       numeroTurno: nuevoNumero,
       enEspera,
-      imagenUrl: `${req.protocol}://${req.get("host")}/tickets/${path.basename(filePath)}`
+      imagenUrl: `${process.env.APP_URL}/tickets/${path.basename(filePath)}`
     });
   } catch (err) {
     console.error("❌ Error al generar turno:", err);
@@ -70,19 +63,13 @@ app.post("/turnos", async (req, res) => {
   }
 });
 
-// 🧾 Función para generar imagen visual del ticket
+// 6. Funciones utilitarias
 async function generarTicketVisual({ nombre, numeroTurno, fecha, enEspera }) {
-  const width = 600;
-  const height = 400;
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
+  const width = 600, height = 400;
+  const canvas = createCanvas(width, height), ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.fillStyle = "#000000";
-  ctx.font = "bold 18px Arial";
-
+  ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#000000"; ctx.font = "bold 18px Arial";
   const lines = [
     "CONSTRUCTORA BISONO",
     "Calle Olof Palme, Esq. Av. Luperón, D.N.",
@@ -93,29 +80,20 @@ async function generarTicketVisual({ nombre, numeroTurno, fecha, enEspera }) {
     `TURNO: ${numeroTurno}`,
     `Nombre: ${nombre || "No especificado"}`,
     `Fecha y Hora: ${new Date(fecha).toLocaleString()}`,
-    `Personas en espera: ${enEspera}`,
+    `Personas en espera: ${enEspera}`
   ];
-
-  lines.forEach((line, index) => {
-    ctx.fillText(line, 40, 40 + index * 35);
-  });
+  lines.forEach((l, i) => ctx.fillText(l, 40, 40 + i * 35));
 
   const filePath = path.join(TICKETS_DIR, `turno_${numeroTurno}.jpg`);
   const out = fs.createWriteStream(filePath);
-  const stream = canvas.createJPEGStream();
-  stream.pipe(out);
+  canvas.createJPEGStream().pipe(out);
 
-  return new Promise((resolve, reject) => {
-    out.on("finish", () => resolve(filePath));
-    out.on("error", reject);
-  });
+  return new Promise((res, rej) => out.on("finish", () => res(filePath)), out.on("error", rej));
 }
 
-// 📲 Enviar imagen por WhatsApp con Gupshup
 async function enviarImagenWhatsApp(destino, filePath) {
   try {
-    const publicUrl = `${process.env.APP_URL || "http://localhost:" + port}/tickets/${path.basename(filePath)}`;
-
+    const publicUrl = `${process.env.APP_URL}/tickets/${path.basename(filePath)}`;
     const data = new FormData();
     data.append("channel", "whatsapp");
     data.append("source", process.env.GUPSHUP_SOURCE);
@@ -129,19 +107,12 @@ async function enviarImagenWhatsApp(destino, filePath) {
     }));
 
     await axios.post("https://api.gupshup.io/sm/api/v1/msg", data, {
-      headers: {
-        ...data.getHeaders(),
-        apikey: process.env.GUPSHUP_APIKEY,
-      },
+      headers: { ...data.getHeaders(), apikey: process.env.GUPSHUP_APIKEY }
     });
-
     console.log("📲 Ticket enviado a WhatsApp:", destino);
   } catch (err) {
     console.error("❌ Error al enviar imagen por WhatsApp:", err.response?.data || err.message);
   }
 }
 
-// 🟢 Inicio del servidor
-app.listen(port, () => {
-  console.log(`🚀 Servidor escuchando en puerto ${port}`);
-});
+app.listen(port, () => console.log(`🚀 Servidor escuchando en ${port}`));

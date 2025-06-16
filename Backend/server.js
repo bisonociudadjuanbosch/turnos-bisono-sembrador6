@@ -20,6 +20,10 @@ const TICKETS_DIR = path.join(__dirname, "tickets");
 if (!fs.existsSync(TICKETS_DIR)) fs.mkdirSync(TICKETS_DIR);
 app.use("/tickets", express.static(TICKETS_DIR));
 
+// Importar rutas externas
+const uploadTurno = require("./upload-turno");
+app.use("/", uploadTurno);
+
 const port = process.env.PORT || 10000;
 const mongodbUri = process.env.MONGODB_URI;
 
@@ -54,9 +58,7 @@ app.post("/turnos", async (req, res) => {
       fecha: nuevoTurno.fecha,
       enEspera
     });
-    const uploadTurno = require("./upload-turno");
-    app.use("/", uploadTurno);
-    
+
     await enviarImagenWhatsApp(telefono, filePath);
 
     res.json({
