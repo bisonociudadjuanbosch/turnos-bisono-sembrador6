@@ -1,31 +1,38 @@
+// enviarWhatsApp.js
+require('dotenv').config();
 const axios = require('axios');
+const FormData = require('form-data');
 
-async function enviarMensajeWhatsapp(telefono, mensaje) {
-  const APIKEY = process.env.GUPSHUP_APIKEY;
-  const SOURCE = process.env.GUPSHUP_SOURCE;
-  const SRC_NAME = process.env.GUPSHUP_SRC_NAME;
+/**
+ * Envía un mensaje (texto o imagen) por WhatsApp usando Gupshup
+ * @param {string} telefono - Número destino (en formato internacional sin +)
+ * @param {object} message - Objeto con la estructura según tipo:
+ *    { type: 'text', text: '...' }
+ *    { type: 'image', originalUrl:'...', previewUrl:'...', caption:'...' }
+ */
+async function enviarWhatsApp(telefono, message) {
+  const { GUPSHUP_APIKEY, GUPSHUP_SOURCE, GUPSHUP_SRC_NAME } = process.env;
 
   try {
-    const res = await axios.post(
+    const form = new FormData();
+    form.append('channel', 'whatsapp');
+    form.append('source', GUPSHUP_SOURCE);
+    form.append('destination', telefono);
+    form.append('src.name', GUPSHUP_SRC_NAME);
+    form.append('message', JSON.stringify(message));  // evitar message.payload :contentReference[oaicite:1]{index=1}
+
+    const resp = await axios.post(
       'https://api.gupshup.io/wa/api/v1/msg',
-      new URLSearchParams({
-        channel: 'whatsapp',
-        source: SOURCE,
-        destination: telefono,
-        message: JSON.stringify({ type: 'text', text: mensaje }),
-        'src.name': SRC_NAME
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          apikey: APIKEY,
-        }
-      }
+      form,
+      { headers: { ...form.getHeaders(), apikey: GUPSHUP_APIKEY } }
     );
-    console.log(`Mensaje enviado a ${telefono}`);
+
+    console.log('✅ WhatsApp enviado:', resp.data);
+    return resp.data;
   } catch (err) {
-    console.error('Error enviando mensaje WhatsApp:', err.response?.data || err.message);
+    console.error('❌ Error enviando WhatsApp:', err.response?.data || err.message);
+    throw err;
   }
 }
 
-module.exports = enviarMensajeWhatsapp;
+module.exports = enviarWhatsApp;

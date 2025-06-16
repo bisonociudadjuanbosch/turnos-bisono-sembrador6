@@ -15,26 +15,18 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use("/tickets", express.static(path.join(__dirname, "tickets")));
 
-// Hacer pública la carpeta de tickets
 const TICKETS_DIR = path.join(__dirname, "tickets");
 if (!fs.existsSync(TICKETS_DIR)) fs.mkdirSync(TICKETS_DIR);
-app.use("/tickets", express.static(TICKETS_DIR));
-
-// Importar rutas externas
-const uploadTurno = require("./upload-turno");
-app.use("/", uploadTurno);
 
 const port = process.env.PORT || 10000;
 const mongodbUri = process.env.MONGODB_URI;
 
-// 📦 Conexión a MongoDB
 mongoose.connect(mongodbUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log("✅ Conectado a MongoDB"))
   .catch(err => console.error("❌ Error conexión MongoDB:", err));
 
-// 📥 POST /turnos
 app.post("/turnos", async (req, res) => {
   const { nombre, telefono } = req.body;
   if (!telefono) return res.status(400).json({ error: "El teléfono es obligatorio" });
@@ -72,7 +64,6 @@ app.post("/turnos", async (req, res) => {
   }
 });
 
-// 🧾 Función para generar imagen visual del ticket
 async function generarTicketVisual({ nombre, numeroTurno, fecha, enEspera }) {
   const width = 600;
   const height = 400;
@@ -113,7 +104,6 @@ async function generarTicketVisual({ nombre, numeroTurno, fecha, enEspera }) {
   });
 }
 
-// 📲 Enviar imagen por WhatsApp con Gupshup
 async function enviarImagenWhatsApp(destino, filePath) {
   try {
     const publicUrl = `${process.env.APP_URL || "http://localhost:" + port}/tickets/${path.basename(filePath)}`;
@@ -143,7 +133,6 @@ async function enviarImagenWhatsApp(destino, filePath) {
   }
 }
 
-// 🟢 Inicio del servidor
 app.listen(port, () => {
   console.log(`🚀 Servidor escuchando en puerto ${port}`);
 });

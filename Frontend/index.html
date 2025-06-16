@@ -63,88 +63,91 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script>
-  const backendURL = "https://turnos-bisono-sembrador6-5pfm.onrender.com";
-  let ticketImagenBase64 = "";
+  <script>
+    const backendURL = "https://turnos-bisono-sembrador6-5pfm.onrender.com";
+    let ticketImagenBase64 = "";
 
-  async function generarTurno() {
-    const nombre = document.getElementById("nombre").value.trim();
-    const telefono = document.getElementById("telefono").value.trim();
-    const mensaje = document.getElementById("mensaje");
-    const ticket = document.getElementById("ticket");
+    async function generarTurno() {
+      const nombre = document.getElementById("nombre").value.trim();
+      const telefono = document.getElementById("telefono").value.trim();
+      const mensaje = document.getElementById("mensaje");
+      const ticket = document.getElementById("ticket");
 
-    if (!telefono) {
-      mensaje.textContent = "Por favor, ingresa tu número de WhatsApp.";
-      mensaje.style.color = "red";
-      return;
-    }
+      if (!telefono) {
+        mensaje.textContent = "Por favor, ingresa tu número de WhatsApp.";
+        mensaje.style.color = "red";
+        return;
+      }
 
-    try {
-      const res = await fetch(`${backendURL}/turnos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre, telefono })
-      });
-      if (!res.ok) throw new Error("Error al generar el turno");
-
-      const data = await res.json();
-      mensaje.textContent = "✅ Turno generado. Revisa tu WhatsApp.";
-      mensaje.style.color = "green";
-
-      document.getElementById("ticketTurno").textContent = data.numeroTurno;
-      document.getElementById("ticketFecha").textContent = new Date().toLocaleString();
-      document.getElementById("ticketEspera").textContent = data.enEspera ?? "0";
-      ticket.style.display = "block";
-
-      // Hack para html2canvas: esperar un poco para detectar bien los estilos :contentReference[oaicite:1]{index=1}
-      setTimeout(async () => {
-        const canvas = await html2canvas(ticket);
-        ticketImagenBase64 = canvas.toDataURL("image/jpeg", 1.0);
-
-        const numero = data.numeroTurno;
-        const nombreArchivo = `turno-${String(numero).padStart(4,"0")}`;
-
-        const resp = await fetch(`${backendURL}/subir-ticket`, {
+      try {
+        const res = await fetch(`${backendURL}/turnos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ base64: ticketImagenBase64, nombreArchivo })
+          body: JSON.stringify({ nombre, telefono })
         });
-        const result = await resp.json();
-        if (result.url) {
-          window.ticketURL = `${backendURL}${result.url}`;
-          console.log("📸 Ticket subido:", window.ticketURL);
-        } else {
-          alert("Error al subir el ticket: " + (result.error || "desconocido"));
-        }
-      }, 500);
+        if (!res.ok) throw new Error("Error al generar el turno");
 
-      document.getElementById("nombre").value = "";
-      document.getElementById("telefono").value = "";
-    } catch {
-      mensaje.textContent = "❌ Error al generar el turno.";
-      mensaje.style.color = "red";
+        const data = await res.json();
+        mensaje.textContent = "✅ Turno generado. Revisa tu WhatsApp.";
+        mensaje.style.color = "green";
+
+        document.getElementById("ticketTurno").textContent = data.numeroTurno;
+        document.getElementById("ticketFecha").textContent = new Date().toLocaleString();
+        document.getElementById("ticketEspera").textContent = data.enEspera ?? "0";
+        ticket.style.display = "block";
+
+        // Esperar un poco para que html2canvas detecte bien los estilos
+        setTimeout(async () => {
+          const canvas = await html2canvas(ticket);
+          ticketImagenBase64 = canvas.toDataURL("image/jpeg", 1.0);
+
+          const numero = data.numeroTurno;
+          const nombreArchivo = `turno-${String(numero).padStart(4,"0")}`;
+
+          const resp = await fetch(`${backendURL}/subir-ticket`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ base64: ticketImagenBase64, nombreArchivo })
+          });
+          const result = await resp.json();
+          if (result.url) {
+            window.ticketURL = result.url;
+          }
+        }, 500);
+      } catch (error) {
+        mensaje.textContent = "❌ " + error.message;
+        mensaje.style.color = "red";
+        ticket.style.display = "none";
+      }
     }
-  }
 
-  function descargarTicket() {
-    if (!ticketImagenBase64) return alert("Imagen aún no generada");
-    const a = document.createElement("a");
-    a.href = ticketImagenBase64;
-    a.download = `Turno-Bisono-${Date.now()}.jpg`;
-    a.click();
-  }
+    function descargarTicket() {
+      if (!ticketImagenBase64) {
+        alert("Primero genera tu turno.");
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = ticketImagenBase64;
+      link.download = `Turno_Bisono_${document.getElementById("ticketTurno").textContent}.jpg`;
+      link.click();
+    }
 
-  function compartirWhatsApp() {
-    if (!window.ticketURL) return alert("Imagen aún no subida");
-    const texto = `¡Hola! Aquí tienes tu turno para Constructora Bisonó:\n${window.ticketURL}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
-  }
-
-  window.generarTurno = generarTurno;
-  window.descargarTicket = descargarTicket;
-  window.compartirWhatsApp = compartirWhatsApp;
-</script>
-
-
+    function compartirWhatsApp() {
+      if (!window.ticketURL) {
+        alert("Primero genera y sube tu turno.");
+        return;
+      }
+      const telefono = document.getElementById("telefono").value.trim();
+      if (!telefono) {
+        alert("Ingresa tu número de WhatsApp.");
+        return;
+      }
+      const texto = encodeURIComponent(
+        `Hola, aquí está mi turno en Constructora Bisonó:\n${window.ticketURL}`
+      );
+      const url = `https://wa.me/${telefono}?text=${texto}`;
+      window.open(url, "_blank");
+    }
+  </script>
 </body>
 </html>

@@ -47,6 +47,22 @@
 
       tablaTurnos.innerHTML = '';
 
+      async function reiniciarTurnos() {
+  if (confirm("¿Seguro que deseas reiniciar el conteo de turnos?")) {
+    try {
+      const resp = await fetch(`${BACKEND_URL}/reiniciar`, { method: "POST" });
+      const j = await resp.json();
+      statusMsg.textContent = j.message || "✅ Conteo reiniciado";
+      statusMsg.style.color = "green";
+      cargarTurnos();
+    } catch {
+      statusMsg.textContent = "❌ Error reiniciando conteo";
+      statusMsg.style.color = "red";
+    }
+  }
+}
+
+
       turnos.forEach((turno, index) => {
         // Contar personas en espera = turnos con estado Pendiente y numeroTurno > turno.numeroTurno
         const esperando = turnos.filter(t => t.estado === 'Pendiente' && t.numeroTurno > turno.numeroTurno).length;
@@ -150,6 +166,7 @@
       statusMsg.textContent = 'Error cargando turnos.';
     }
   }
+<button onclick="reiniciarTurnos()">🔁 Reiniciar Conteo</button>
 
   cargarTurnos();
 

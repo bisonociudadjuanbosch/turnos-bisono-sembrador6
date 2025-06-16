@@ -13,11 +13,10 @@ const uploadTurnoRouter = require("./upload-turno");
 
 const app = express();
 
-// 1. Parser único con límite alto (evita PayloadTooLargeError)
+// 1. Configuración del servidor
 app.use(cors());
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ limit: "5mb", extended: true }));
-// [IMPORTANTE] No usar otros body-parsers sin límite personalizado :contentReference[oaicite:1]{index=1}
 
 // 2. Servir imágenes de tickets
 const TICKETS_DIR = path.join(__dirname, "tickets");
@@ -31,6 +30,7 @@ const port = process.env.PORT || 10000;
 const mongodbUri = process.env.MONGODB_URI;
 
 // 4. Conexión a MongoDB
+const mongodbUri = process.env.MONGODB_URI;
 mongoose.connect(mongodbUri, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ Conectado a MongoDB"))
   .catch(err => console.error("❌ Error conexión MongoDB:", err));
@@ -115,4 +115,6 @@ async function enviarImagenWhatsApp(destino, filePath) {
   }
 }
 
+// Iniciar servidor
+const port = process.env.PORT || 10000;
 app.listen(port, () => console.log(`🚀 Servidor escuchando en ${port}`));
