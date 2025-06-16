@@ -1,26 +1,19 @@
 {
-  "name": "bisono-turnos-sembrador6",
+  "name": "turnos-bisono",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node index.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/bisonociudadjuanbosch/turnos-bisono-sembrador6.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/bisonociudadjuanbosch/turnos-bisono-sembrador6/issues"
-  },
-  "homepage": "https://github.com/bisonociudadjuanbosch/turnos-bisono-sembrador6#readme",
   "dependencies": {
-    "dotenv": "^16.5.0",
-    "express": "^5.1.0",
-    "mongoose": "^8.15.2"
-  },
-  "description": ""
+    "axios": "^1.6.0",
+    "canvas": "^3.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "fs": "^0.0.1-security",
+    "mongoose": "^7.6.0",
+    "multer": "^2.0.1",
+    "path": "^0.12.7"
+  }
 }
